@@ -343,6 +343,7 @@ public function process_reservation_payment($data) {
         
         $reservation_data['total_personas'] = $total_personas;
         $reservation_data['total_viajeros'] = $total_personas + $ninos_menores;
+        $reservation_data['order_id'] = $data['order_id'] ?? null;
         
         // Verificar disponibilidad
         $servicio = $this->verificar_disponibilidad($reservation_data['service_id'], $total_personas);
@@ -560,7 +561,8 @@ public function process_reservation_payment($data) {
             'precio_final' => $calculo_precio['precio_final'],
             'regla_descuento_aplicada' => $calculo_precio['regla_descuento_aplicada'] ? json_encode($calculo_precio['regla_descuento_aplicada']) : null,
             'estado' => 'confirmada',
-            'metodo_pago' => 'directo'
+            'metodo_pago' => 'directo',
+            'redsys_order_id' => $datos_reserva['order_id'] ?? null
         );
 
         error_log('Datos de reserva a insertar: ' . print_r($reserva_data, true));

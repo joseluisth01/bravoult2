@@ -1722,7 +1722,60 @@ function handle_redsys_notification() {
     exit;
 }
 
+// Nuevo endpoint para cargar datos de reserva confirmada
+add_action('wp_ajax_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
+add_action('wp_ajax_nopriv_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
 
+function get_confirmed_reservation_data() {
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+    
+    $order_id = sanitize_text_field($_POST['order_id'] ?? '');
+    
+    if (empty($order_id)) {
+        wp_send_json_error('Order ID no proporcionado');
+        return;
+    }
+    
+    try {
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        
+        // Buscar la reserva más reciente con este order_id (puedes guardar order_id en la tabla)
+        // O buscar por timestamp reciente si no guardas order_id
+        $reserva = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_reservas 
+             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+             ORDER BY created_at DESC 
+             LIMIT 1"
+        ));
+        
+        if (!$reserva) {
+            wp_send_json_error('Reserva no encontrada');
+            return;
+        }
+        
+        // Formatear datos igual que en process_successful_payment
+        $response_data = array(
+            'localizador' => $reserva->localizador,
+            'reserva_id' => $reserva->id,
+            'detalles' => array(
+                'fecha' => $reserva->fecha,
+                'hora' => $reserva->hora,
+                'personas' => $reserva->total_personas,
+                'precio_final' => $reserva->precio_final
+            )
+        );
+        
+        wp_send_json_success($response_data);
+        
+    } catch (Exception $e) {
+        error_log('Error cargando datos de confirmación: ' . $e->getMessage());
+        wp_send_json_error('Error interno del servidor');
+    }
+}
 
 
 // Inicializar el plugin
