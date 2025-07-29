@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Sistema de Reservas
  * Description: Sistema completo de reservas para servicios de transporte - CON RECORDATORIOS AUTOMÁTICOS
- * Version: 1.0
+ * Version: 1.000
  */
 
 if (!defined('ABSPATH')) {
@@ -640,31 +640,41 @@ private function load_dependencies()
     }
 
     private function create_super_admin()
-    {
-        global $wpdb;
+{
+    global $wpdb;
 
-        $table_name = $wpdb->prefix . 'reservas_users';
+    $table_name = $wpdb->prefix . 'reservas_users';
 
-        // Verificar si ya existe
-        $existing = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $table_name WHERE username = %s",
-            'superadmin'
-        ));
+    // Verificar si ya existe
+    $existing = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $table_name WHERE username = %s",
+        'administrador'
+    ));
 
-        if ($existing == 0) {
-            $wpdb->insert(
-                $table_name,
-                array(
-                    'username' => 'superadmin',
-                    'email' => 'admin@' . parse_url(home_url(), PHP_URL_HOST),
-                    'password' => password_hash('admin123', PASSWORD_DEFAULT),
-                    'role' => 'super_admin',
-                    'status' => 'active',
-                    'created_at' => current_time('mysql')
-                )
-            );
-        }
+    if ($existing == 0) {
+        $wpdb->insert(
+            $table_name,
+            array(
+                'username' => 'administrador',
+                'email' => 'admin@' . parse_url(home_url(), PHP_URL_HOST),
+                'password' => password_hash('busmedina', PASSWORD_DEFAULT),
+                'role' => 'super_admin',
+                'status' => 'active',
+                'created_at' => current_time('mysql')
+            )
+        );
+    } else {
+        // Si ya existe, actualizar la contraseña
+        $wpdb->update(
+            $table_name,
+            array(
+                'username' => 'administrador',
+                'password' => password_hash('busmedina', PASSWORD_DEFAULT)
+            ),
+            array('role' => 'super_admin')
+        );
     }
+}
 
     private function create_default_discount_rule()
     {
@@ -1603,7 +1613,60 @@ function ajax_generar_formulario_pago_redsys()
 add_action('wp_ajax_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
 add_action('wp_ajax_nopriv_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
 
+add_action('wp_ajax_reset_super_admin', 'reset_super_admin_credentials');
 
+function reset_super_admin_credentials() {
+    // Solo permitir en desarrollo o con parámetro específico
+    if (!isset($_GET['reset_admin']) || $_GET['reset_admin'] !== 'confirm') {
+        wp_die('Acción no autorizada');
+    }
+    
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'reservas_users';
+    
+    // Actualizar o crear el super admin
+    $existing = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $table_name WHERE role = %s LIMIT 1",
+        'super_admin'
+    ));
+    
+    if ($existing) {
+        // Actualizar existente
+        $result = $wpdb->update(
+            $table_name,
+            array(
+                'username' => 'administrador',
+                'password' => password_hash('busmedina', PASSWORD_DEFAULT),
+                'status' => 'active'
+            ),
+            array('id' => $existing)
+        );
+    } else {
+        // Crear nuevo
+        $result = $wpdb->insert(
+            $table_name,
+            array(
+                'username' => 'administrador',
+                'email' => 'admin@' . parse_url(home_url(), PHP_URL_HOST),
+                'password' => password_hash('busmedina', PASSWORD_DEFAULT),
+                'role' => 'super_admin',
+                'status' => 'active',
+                'created_at' => current_time('mysql')
+            )
+        );
+    }
+    
+    if ($result !== false) {
+        echo "✅ Credenciales de super admin actualizadas correctamente<br>";
+        echo "Usuario: administrador<br>";
+        echo "Contraseña: busmedina<br>";
+        echo "<a href='" . home_url('/reservas-login/') . "'>Ir al login</a>";
+    } else {
+        echo "❌ Error actualizando credenciales: " . $wpdb->last_error;
+    }
+    
+    exit;
+}
 
 add_action('wp_ajax_redsys_notification', 'handle_redsys_notification');
 add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');

@@ -83,15 +83,8 @@ class ReservasDashboard
                     <button type="submit" class="btn-login">Iniciar Sesión</button>
                 </form>
 
-                <div class="info-box">
-                    <h4>Acceso para Administradores</h4>
-                    <p><strong>Usuario inicial:</strong> administrador</p>
-                    <p><strong>Contraseña inicial:</strong> busmedina</p>
-                    <p><em>Cambia estas credenciales después del primer acceso</em></p>
-                </div>
-
                 <div class="info-box" style="margin-top: 20px; background: #e8f4f8; border-left: 4px solid #0073aa;">
-                    <h4>Acceso para Agencias</h4>
+                    <h4>Acceso para Agencias/Conductor</h4>
                     <p>Si eres una agencia, utiliza las credenciales que te proporcionó el administrador.</p>
                     <p><em>Contacta con el administrador si tienes problemas de acceso.</em></p>
                 </div>
