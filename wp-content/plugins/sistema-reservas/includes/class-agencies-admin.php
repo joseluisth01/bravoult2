@@ -127,54 +127,102 @@ private function create_agencies_table()
 /**
  * Obtener lista de agencias
  */
-public function get_agencies_list()
-{
-    error_log('=== AGENCIES LIST AJAX REQUEST START ===');
-    header('Content-Type: application/json');
-
-    try {
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-            wp_send_json_error('Error de seguridad');
-            return;
-        }
-
+function process_successful_payment($order_id, $params) {
+    error_log('=== PROCESANDO PAGO EXITOSO CON REDSYS ===');
+    error_log("Order ID: $order_id");
+    error_log("Params recibidos: " . print_r($params, true));
+    
+    // Recuperar datos de la reserva
+    $reservation_data = get_transient('redsys_order_' . $order_id);
+    
+    if (!$reservation_data) {
         if (!session_id()) {
             session_start();
         }
+        $reservation_data = $_SESSION['pending_orders'][$order_id]['reservation_data'] ?? null;
+    }
+    
+    if (!$reservation_data) {
+        error_log('❌ No se encontraron datos de reserva para pedido: ' . $order_id);
+        return false;
+    }
 
-        if (!isset($_SESSION['reservas_user'])) {
-            wp_send_json_error('Sesión expirada. Recarga la página e inicia sesión nuevamente.');
-            return;
+    try {
+        // Procesar la reserva usando tu sistema existente
+        if (!class_exists('ReservasProcessor')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-reservas-processor.php';
         }
 
-        $user = $_SESSION['reservas_user'];
-        if ($user['role'] !== 'super_admin') {
-            wp_send_json_error('Sin permisos para gestionar agencias');
-            return;
-        }
-
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'reservas_agencies';
-
-        // ✅ CONSULTA ACTUALIZADA CON inicial_localizador
-        $agencies = $wpdb->get_results(
-            "SELECT id, agency_name, contact_person, email, email_notificaciones, phone, 
-                    username, razon_social, cif, domicilio_fiscal, inicial_localizador, address, notes,
-                    status, created_at, updated_at 
-             FROM $table_name 
-             ORDER BY agency_name ASC"
+        $processor = new ReservasProcessor();
+        
+        // Preparar datos para el procesador
+        $processed_data = array(
+            'nombre' => $reservation_data['nombre'] ?? '',
+            'apellidos' => $reservation_data['apellidos'] ?? '',
+            'email' => $reservation_data['email'] ?? '',
+            'telefono' => $reservation_data['telefono'] ?? '',
+            'reservation_data' => json_encode($reservation_data),
+            'metodo_pago' => 'redsys',
+            'transaction_id' => $params['Ds_AuthorisationCode'] ?? '',
+            'order_id' => $order_id
         );
 
-        if ($wpdb->last_error) {
-            error_log('❌ Database error in agencies list: ' . $wpdb->last_error);
-            die(json_encode(['success' => false, 'data' => 'Database error: ' . $wpdb->last_error]));
+        // Procesar la reserva usando el método existente
+        $result = $processor->process_reservation_payment($processed_data);
+        
+        if ($result['success']) {
+            error_log('✅ Reserva procesada exitosamente: ' . $result['data']['localizador']);
+            
+            // ✅ GUARDAR EN MÚLTIPLES LUGARES PARA ASEGURAR QUE LLEGUE A LA PÁGINA DE CONFIRMACIÓN
+            if (!session_id()) {
+                session_start();
+            }
+            
+            // 1. Guardar en sesión
+            $_SESSION['confirmed_reservation'] = $result['data'];
+            
+            // 2. Guardar en transient con el order_id
+            set_transient('confirmed_reservation_' . $order_id, $result['data'], 3600);
+            
+            // 3. Guardar con el localizador también
+            set_transient('confirmed_reservation_loc_' . $result['data']['localizador'], $result['data'], 3600);
+            
+            // 4. ✅ NUEVO: Guardar en base de datos temporal para mayor seguridad
+            update_option('temp_reservation_' . $order_id, $result['data'], false);
+            update_option('temp_reservation_loc_' . $result['data']['localizador'], $result['data'], false);
+            
+            // 5. ✅ GUARDAR TAMBIÉN CON UNA CLAVE GENÉRICA PARA RESERVA MÁS RECIENTE
+            set_transient('latest_confirmed_reservation', $result['data'], 1800); // 30 minutos
+            
+            // 6. ✅ NUEVO: Actualizar la reserva en BD con el order_id de Redsys
+            global $wpdb;
+            $table_reservas = $wpdb->prefix . 'reservas_reservas';
+            
+            $wpdb->update(
+                $table_reservas,
+                array('redsys_order_id' => $order_id),
+                array('localizador' => $result['data']['localizador'])
+            );
+            
+            error_log('✅ Datos de confirmación guardados en múltiples ubicaciones');
+            error_log('- Localizador: ' . $result['data']['localizador']);
+            error_log('- Order ID: ' . $order_id);
+            
+            // Limpiar datos temporales
+            delete_transient('redsys_order_' . $order_id);
+            if (isset($_SESSION['pending_orders'][$order_id])) {
+                unset($_SESSION['pending_orders'][$order_id]);
+            }
+            
+            return true;
+        } else {
+            error_log('❌ Error procesando reserva: ' . $result['message']);
+            return false;
         }
-
-        error_log('✅ Found ' . count($agencies) . ' agencies');
-        die(json_encode(['success' => true, 'data' => $agencies]));
+        
     } catch (Exception $e) {
-        error_log('❌ AGENCIES LIST EXCEPTION: ' . $e->getMessage());
-        die(json_encode(['success' => false, 'data' => 'Server error: ' . $e->getMessage()]));
+        error_log('❌ Excepción procesando pago exitoso: ' . $e->getMessage());
+        return false;
     }
 }
 

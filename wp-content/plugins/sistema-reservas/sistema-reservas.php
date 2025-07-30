@@ -1806,7 +1806,7 @@ function ajax_get_confirmed_reservation_data() {
     error_log('=== INTENTANDO RECUPERAR DATOS DE CONFIRMACIÓN ===');
     error_log('Order ID recibido: ' . $order_id);
     
-    // Método 1: Desde URL (order_id)
+    // ✅ MÉTODO 1: Desde URL (order_id)
     if (!empty($order_id)) {
         // Buscar en transients
         $data = get_transient('confirmed_reservation_' . $order_id);
@@ -1820,14 +1820,45 @@ function ajax_get_confirmed_reservation_data() {
         $data = get_option('temp_reservation_' . $order_id);
         if ($data) {
             error_log('✅ Datos encontrados en options por order_id');
-            // Limpiar después de usar
-            delete_option('temp_reservation_' . $order_id);
+            wp_send_json_success($data);
+            return;
+        }
+        
+        // ✅ NUEVO: Buscar en BD por redsys_order_id
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        
+        $reserva = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_reservas WHERE redsys_order_id = %s ORDER BY created_at DESC LIMIT 1",
+            $order_id
+        ));
+        
+        if ($reserva) {
+            error_log('✅ Reserva encontrada en BD por redsys_order_id');
+            $data = array(
+                'localizador' => $reserva->localizador,
+                'reserva_id' => $reserva->id,
+                'detalles' => array(
+                    'fecha' => $reserva->fecha,
+                    'hora' => $reserva->hora,
+                    'personas' => $reserva->total_personas,
+                    'precio_final' => $reserva->precio_final
+                )
+            );
             wp_send_json_success($data);
             return;
         }
     }
     
-    // Método 2: Desde sesión
+    // ✅ MÉTODO 2: Transient genérico para la más reciente
+    $data = get_transient('latest_confirmed_reservation');
+    if ($data) {
+        error_log('✅ Datos encontrados en transient genérico');
+        wp_send_json_success($data);
+        return;
+    }
+    
+    // ✅ MÉTODO 3: Desde sesión
     if (!session_id()) {
         session_start();
     }
@@ -1835,8 +1866,6 @@ function ajax_get_confirmed_reservation_data() {
     if (isset($_SESSION['confirmed_reservation'])) {
         error_log('✅ Datos encontrados en sesión');
         $data = $_SESSION['confirmed_reservation'];
-        // Limpiar sesión después de usar
-        unset($_SESSION['confirmed_reservation']);
         wp_send_json_success($data);
         return;
     }
@@ -1854,13 +1883,17 @@ function ajax_get_most_recent_reservation() {
         return;
     }
     
+    error_log('=== BUSCANDO RESERVA MÁS RECIENTE ===');
+    
     global $wpdb;
     $table_reservas = $wpdb->prefix . 'reservas_reservas';
     
+    // ✅ AMPLIAR VENTANA DE BÚSQUEDA Y MEJORAR CONSULTA
     $recent_reservation = $wpdb->get_row($wpdb->prepare(
         "SELECT * FROM $table_reservas 
-         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
          AND metodo_pago = 'redsys'
+         AND estado = 'confirmada'
          ORDER BY created_at DESC 
          LIMIT 1"
     ));
