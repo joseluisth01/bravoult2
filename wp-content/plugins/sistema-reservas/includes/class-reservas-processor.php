@@ -565,8 +565,8 @@ private function crear_reserva($datos_personales, $datos_reserva, $calculo_preci
         'precio_final' => $calculo_precio['precio_final'],
         'regla_descuento_aplicada' => $calculo_precio['regla_descuento_aplicada'] ? json_encode($calculo_precio['regla_descuento_aplicada']) : null,
         'estado' => 'confirmada',
-        'metodo_pago' => 'redsys', // ✅ CAMBIAR PARA REDSYS
-        'redsys_order_id' => $datos_reserva['order_id'] ?? null // ✅ AÑADIR ESTE CAMPO
+        'metodo_pago' => 'redsys',
+        'redsys_order_id' => $datos_reserva['order_id'] ?? null
     );
 
     error_log('Datos de reserva a insertar: ' . print_r($reserva_data, true));

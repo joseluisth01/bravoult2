@@ -1032,7 +1032,7 @@ function confirmacion_reserva_shortcode()
                 Recuerda presentarte en la parada 10 minutos antes de la salida.
             </div>
 
-            <div class="arrival-info" id="arrival-info">
+            <div style="display:none !important" class="arrival-info" id="arrival-info">
                 <span class="loading-state">📍 Cargando información del viaje...</span>
             </div>
 
@@ -1065,41 +1065,54 @@ function confirmacion_reserva_shortcode()
             window.location.href = '<?php echo home_url('/'); ?>';
         }
 
-        // ✅ FUNCIÓN COMPLETAMENTE NUEVA PARA CARGAR DATOS
-        function loadReservationData() {
-            console.log('=== INTENTANDO CARGAR DATOS DE RESERVA ===');
+function loadReservationData() {
+    console.log('=== INTENTANDO CARGAR DATOS DE RESERVA ===');
+    
+    // ✅ Método 1: Desde URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('order');
+    
+    console.log('Order ID desde URL:', orderId);
+    
+    if (orderId) {
+        // Solicitar datos al servidor usando AJAX
+        fetch(ajaxurl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'get_confirmed_reservation_data',
+                order_id: orderId,
+                nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('📡 Respuesta del servidor para order_id:', data);
             
-            // ✅ Método 1: Desde sessionStorage (frontend)
-            try {
-                const confirmedData = sessionStorage.getItem('confirmedReservation');
-                if (confirmedData) {
-                    reservationData = JSON.parse(confirmedData);
-                    console.log('✅ Datos encontrados en sessionStorage:', reservationData);
-                    updateArrivalInfo();
-                    enableActionButtons();
-                    sessionStorage.removeItem('confirmedReservation');
-                    return;
-                }
-            } catch (error) {
-                console.warn('⚠️ Error leyendo sessionStorage:', error);
-            }
-            
-            // ✅ Método 2: Desde URL params
-            const urlParams = new URLSearchParams(window.location.search);
-            const orderId = urlParams.get('order');
-            
-            console.log('Order ID desde URL:', orderId);
-            
-            if (orderId) {
-                // Solicitar datos al servidor
-                fetchReservationFromServer(orderId);
+            if (data.success && data.data) {
+                reservationData = data.data;
+                console.log('✅ Datos de reserva cargados desde servidor por order_id');
+                updateArrivalInfo();
+                enableActionButtons();
                 return;
+            } else {
+                console.log('⚠️ No se encontraron datos por order_id, intentando método 2...');
+                fetchMostRecentReservation();
             }
-            
-            // ✅ Método 3: Solicitar la reserva más reciente
-            console.log('🔍 Solicitando reserva más reciente...');
+        })
+        .catch(error => {
+            console.error('❌ Error solicitando datos por order_id:', error);
             fetchMostRecentReservation();
-        }
+        });
+        return;
+    }
+    
+    // Si no hay order_id, ir directamente al método de reserva más reciente
+    console.log('🔍 No hay order_id, solicitando reserva más reciente...');
+    fetchMostRecentReservation();
+}
 
         // ✅ NUEVA FUNCIÓN PARA OBTENER DATOS DEL SERVIDOR
         function fetchReservationFromServer(orderId) {
@@ -1136,41 +1149,40 @@ function confirmacion_reserva_shortcode()
             });
         }
 
-        // ✅ NUEVA FUNCIÓN PARA OBTENER RESERVA MÁS RECIENTE
         function fetchMostRecentReservation() {
-            console.log('📡 Solicitando reserva más reciente...');
-            
-            fetch(ajaxurl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    action: 'get_most_recent_reservation',
-                    nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('📡 Respuesta reserva reciente:', data);
-                
-                if (data.success && data.data) {
-                    reservationData = data.data;
-                    console.log('✅ Reserva reciente cargada');
-                    updateArrivalInfo();
-                    enableActionButtons();
-                } else {
-                    console.error('❌ No se encontró reserva reciente');
-                    showGenericInfo();
-                    enableActionButtons();
-                }
-            })
-            .catch(error => {
-                console.error('❌ Error cargando reserva reciente:', error);
-                showErrorInfo();
-                enableActionButtons();
-            });
+    console.log('📡 Solicitando reserva más reciente...');
+    
+    fetch(ajaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+            action: 'get_most_recent_reservation',
+            nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('📡 Respuesta reserva reciente:', data);
+        
+        if (data.success && data.data) {
+            reservationData = data.data;
+            console.log('✅ Reserva reciente cargada');
+            updateArrivalInfo();
+            enableActionButtons();
+        } else {
+            console.error('❌ No se encontró reserva reciente');
+            showGenericInfo();
+            enableActionButtons();
         }
+    })
+    .catch(error => {
+        console.error('❌ Error cargando reserva reciente:', error);
+        showErrorInfo();
+        enableActionButtons();
+    });
+}
 
         function updateArrivalInfo() {
             if (!reservationData || !reservationData.detalles) {
@@ -1776,6 +1788,100 @@ function get_confirmed_reservation_data() {
     }
     
     return null;
+}
+
+add_action('wp_ajax_get_confirmed_reservation_data', 'ajax_get_confirmed_reservation_data');
+add_action('wp_ajax_nopriv_get_confirmed_reservation_data', 'ajax_get_confirmed_reservation_data');
+
+function ajax_get_confirmed_reservation_data() {
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+
+    $order_id = sanitize_text_field($_POST['order_id'] ?? '');
+    
+    error_log('=== INTENTANDO RECUPERAR DATOS DE CONFIRMACIÓN ===');
+    error_log('Order ID recibido: ' . $order_id);
+    
+    // Método 1: Desde URL (order_id)
+    if (!empty($order_id)) {
+        // Buscar en transients
+        $data = get_transient('confirmed_reservation_' . $order_id);
+        if ($data) {
+            error_log('✅ Datos encontrados en transient por order_id');
+            wp_send_json_success($data);
+            return;
+        }
+        
+        // Buscar en options temporales
+        $data = get_option('temp_reservation_' . $order_id);
+        if ($data) {
+            error_log('✅ Datos encontrados en options por order_id');
+            // Limpiar después de usar
+            delete_option('temp_reservation_' . $order_id);
+            wp_send_json_success($data);
+            return;
+        }
+    }
+    
+    // Método 2: Desde sesión
+    if (!session_id()) {
+        session_start();
+    }
+    
+    if (isset($_SESSION['confirmed_reservation'])) {
+        error_log('✅ Datos encontrados en sesión');
+        $data = $_SESSION['confirmed_reservation'];
+        // Limpiar sesión después de usar
+        unset($_SESSION['confirmed_reservation']);
+        wp_send_json_success($data);
+        return;
+    }
+    
+    error_log('❌ No se encontraron datos de confirmación por ningún método');
+    wp_send_json_error('No se encontraron datos de confirmación');
+}
+
+add_action('wp_ajax_get_most_recent_reservation', 'ajax_get_most_recent_reservation');
+add_action('wp_ajax_nopriv_get_most_recent_reservation', 'ajax_get_most_recent_reservation');
+
+function ajax_get_most_recent_reservation() {
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+    
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    
+    $recent_reservation = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_reservas 
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+         AND metodo_pago = 'redsys'
+         ORDER BY created_at DESC 
+         LIMIT 1"
+    ));
+    
+    if ($recent_reservation) {
+        error_log('✅ Reserva reciente encontrada en BD: ' . $recent_reservation->localizador);
+        
+        $data = array(
+            'localizador' => $recent_reservation->localizador,
+            'reserva_id' => $recent_reservation->id,
+            'detalles' => array(
+                'fecha' => $recent_reservation->fecha,
+                'hora' => $recent_reservation->hora,
+                'personas' => $recent_reservation->total_personas,
+                'precio_final' => $recent_reservation->precio_final
+            )
+        );
+        
+        wp_send_json_success($data);
+    } else {
+        error_log('❌ No se encontraron reservas recientes');
+        wp_send_json_error('No se encontraron reservas recientes');
+    }
 }
 
 // Inicializar el plugin

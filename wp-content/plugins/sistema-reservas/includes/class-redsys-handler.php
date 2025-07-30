@@ -189,16 +189,15 @@ function process_successful_payment($order_id, $params) {
             set_transient('confirmed_reservation_loc_' . $result['data']['localizador'], $result['data'], 3600);
             
             // 4. ✅ NUEVO: Guardar en base de datos temporal para mayor seguridad
-            global $wpdb;
-            $table_temp = $wpdb->prefix . 'options'; // Usar tabla options como temporal
-            
             update_option('temp_reservation_' . $order_id, $result['data'], false);
             update_option('temp_reservation_loc_' . $result['data']['localizador'], $result['data'], false);
             
+            // 5. ✅ GUARDAR EN sessionStorage TAMBIÉN (para JavaScript)
+            $_SESSION['reserva_para_js'] = $result['data'];
+            
             error_log('✅ Datos de confirmación guardados en múltiples ubicaciones');
-            error_log('- Sesión: ' . print_r($_SESSION['confirmed_reservation'], true));
-            error_log('- Transient order: confirmed_reservation_' . $order_id);
-            error_log('- Transient loc: confirmed_reservation_loc_' . $result['data']['localizador']);
+            error_log('- Localizador: ' . $result['data']['localizador']);
+            error_log('- Order ID: ' . $order_id);
             
             // Limpiar datos temporales
             delete_transient('redsys_order_' . $order_id);
