@@ -12,6 +12,99 @@ class ReservasEmailService
     }
 
     /**
+ * Enviar solicitud de cancelación al administrador
+ */
+public static function send_cancellation_request_to_admin($data)
+{
+    try {
+        $reserva = $data['reserva'];
+        $agency_name = $data['agency_name'];
+        $motivo = $data['motivo_cancelacion'];
+
+        // Obtener configuración de emails
+        $email_admin = self::get_config('email_reservas', get_option('admin_email'));
+        $nombre_remitente = self::get_config('nombre_remitente', get_bloginfo('name'));
+
+        $subject = "Solicitud de Cancelación - Reserva {$reserva['localizador']}";
+
+        $fecha_formateada = date('d/m/Y', strtotime($reserva['fecha']));
+
+        $body = "
+        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
+            
+            <div style='background: #dc3545; color: white; padding: 20px; text-align: center;'>
+                <h1 style='margin: 0; font-size: 24px;'>⚠️ SOLICITUD DE CANCELACIÓN</h1>
+            </div>
+            
+            <div style='padding: 30px;'>
+                <div style='background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 25px;'>
+                    <p style='margin: 0; color: #856404; font-weight: bold;'>
+                        La agencia <strong>{$agency_name}</strong> ha solicitado la cancelación de una reserva.
+                    </p>
+                </div>
+                
+                <h2 style='color: #dc3545; margin-bottom: 20px;'>Detalles de la Reserva</h2>
+                
+                <table style='width: 100%; border-collapse: collapse; margin-bottom: 25px;'>
+                    <tr>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold; width: 150px;'>Localizador:</td>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee; color: #0073aa; font-weight: bold;'>{$reserva['localizador']}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;'>Cliente:</td>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee;'>{$reserva['nombre']} {$reserva['apellidos']}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;'>Email:</td>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee;'>{$reserva['email']}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;'>Fecha servicio:</td>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee;'>{$fecha_formateada} a las {$reserva['hora']}</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;'>Personas:</td>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee;'>{$reserva['total_personas']} personas</td>
+                    </tr>
+                    <tr>
+                        <td style='padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;'>Precio:</td>
+                       <td style='padding: 8px 0; border-bottom: 1px solid #eee; color: #28a745; font-weight: bold;'>{$reserva['precio_final']}€</td>
+                   </tr>
+                   <tr>
+                       <td style='padding: 8px 0; font-weight: bold;'>Agencia:</td>
+                       <td style='padding: 8px 0; color: #7b1fa2; font-weight: bold;'>{$agency_name}</td>
+                   </tr>
+               </table>
+               
+               <div style='background: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 25px;'>
+                   <h3 style='margin: 0 0 10px 0; color: #721c24;'>Motivo de la Solicitud:</h3>
+                   <p style='margin: 0; color: #721c24; font-style: italic;'>\"{$motivo}\"</p>
+               </div>
+               
+               <div style='text-align: center; margin-top: 30px;'>
+                   <p style='color: #666; margin-bottom: 20px;'>Accede al dashboard para gestionar esta solicitud</p>
+                   <a href='" . home_url('/reservas-admin/') . "' style='display: inline-block; background: #0073aa; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;'>Ir al Dashboard</a>
+               </div>
+           </div>
+           
+           <div style='background: #f8f9fa; padding: 15px; text-align: center; font-size: 12px; color: #666;'>
+               <p style='margin: 0;'>Este email fue enviado automáticamente por el sistema de reservas</p>
+               <p style='margin: 5px 0 0 0;'>Fecha: " . date('d/m/Y H:i') . "</p>
+           </div>
+       </div>";
+
+       return self::send_email($email_admin, $subject, $body, $nombre_remitente);
+
+   } catch (Exception $e) {
+       error_log('Error enviando solicitud de cancelación: ' . $e->getMessage());
+       return array(
+           'success' => false,
+           'message' => 'Error enviando email: ' . $e->getMessage()
+       );
+   }
+}
+
+    /**
      * Enviar email de confirmación al cliente CON PDF ADJUNTO
      */
     public static function send_customer_confirmation($reserva_data)
