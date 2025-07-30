@@ -153,7 +153,7 @@ function loadDefaultConfiguration() {
         })
             .then(response => {
                 console.log('Response status:', response.status);
-                
+
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -2249,7 +2249,7 @@ function loadReservationsByDateWithFilters(page = 1) {
         .then(response => response.json())
         .then(data => {
             console.log('Respuesta del servidor:', data);
-            
+
             if (data.success) {
                 console.log('✅ Datos cargados correctamente');
                 console.log('Total reservas encontradas:', data.data.stats.total_reservas);
@@ -2397,6 +2397,7 @@ function renderReservationsReportWithFilters(data) {
                 <tr>
                     <th>Localizador</th>
                     <th>Fecha Servicio</th>
+                    <th>Fecha Compra</th>
                     <th>Hora</th>
                     <th>Cliente</th>
                     <th>Email</th>
@@ -2405,7 +2406,7 @@ function renderReservationsReportWithFilters(data) {
                     <th>Total</th>
                     <th>Estado</th>
                     <th>Agencia</th> <!-- ✅ NUEVA COLUMNA -->
-                    <th>Fecha Compra</th>
+                    
                     <th>Acciones</th>
                 </tr>
             </thead>
@@ -2434,17 +2435,18 @@ function renderReservationsReportWithFilters(data) {
             if (reserva.estado === 'pendiente') {
                 estadoClass = 'status-pendiente';
             }
-let agencyInfo = 'Directa';
-           let agencyClass = 'agency-direct';
-           if (reserva.agency_name) {
-               agencyInfo = reserva.agency_name;
-               agencyClass = 'agency-name';
-           }
+            let agencyInfo = 'Directa';
+            let agencyClass = 'agency-direct';
+            if (reserva.agency_name) {
+                agencyInfo = reserva.agency_name;
+                agencyClass = 'agency-name';
+            }
 
-           tableHtml += `
+            tableHtml += `
                <tr class="${rowClass}">
                    <td><strong>${reserva.localizador}</strong></td>
                    <td>${fechaServicioFormateada}</td>
+                   <td><small>${fechaCompraFormateada}</small></td>
                    <td>${reserva.hora}</td>
                    <td>${reserva.nombre} ${reserva.apellidos}</td>
                    <td>${reserva.email}</td>
@@ -2453,36 +2455,36 @@ let agencyInfo = 'Directa';
                    <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
                    <td><span class="status-badge ${estadoClass}">${reserva.estado.toUpperCase()}</span></td>
                    <td><span class="agency-badge ${agencyClass}">${agencyInfo}</span></td>
-                   <td><small>${fechaCompraFormateada}</small></td>
+                   
                    <td>
                         <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
                         
                         ${reserva.estado !== 'cancelada' ?
-                            `<button class="btn-small btn-warning" onclick="showEditReservationModal(${reserva.id})" title="Editar fecha/horario">📅</button>` :
-                            ''
-                        }
+                    `<button class="btn-small btn-warning" onclick="showEditReservationModal(${reserva.id})" title="Editar fecha/horario">📅</button>` :
+                    ''
+                }
                         <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
                         <!-- ✅ AÑADIR ESTE BOTÓN -->
                         <button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
                         ${reserva.estado !== 'cancelada' ?
-                            `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
-                            `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
-                        }
+                    `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
+                    `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
+                }
                     </td>
                </tr>
            `;
-       });
-   } else {
-       tableHtml += `
+        });
+    } else {
+        tableHtml += `
            <tr>
                <td colspan="12" style="text-align: center; padding: 40px; color: #666;">
                    No se encontraron reservas con los filtros aplicados
                </td>
            </tr>
        `;
-   }
+    }
 
-   tableHtml += `
+    tableHtml += `
            </tbody>
        </table>
        
@@ -2583,14 +2585,14 @@ let agencyInfo = 'Directa';
        </style>
    `;
 
-   document.getElementById('reservations-list').innerHTML = tableHtml;
+    document.getElementById('reservations-list').innerHTML = tableHtml;
 
-   // Mostrar paginación (sin cambios)
-   if (data.pagination && data.pagination.total_pages > 1) {
-       renderPaginationWithFilters(data.pagination);
-   } else {
-       document.getElementById('reservations-pagination').innerHTML = '';
-   }
+    // Mostrar paginación (sin cambios)
+    if (data.pagination && data.pagination.total_pages > 1) {
+        renderPaginationWithFilters(data.pagination);
+    } else {
+        document.getElementById('reservations-pagination').innerHTML = '';
+    }
 }
 
 function renderPaginationWithFilters(pagination) {
@@ -2627,7 +2629,7 @@ function renderPaginationWithFilters(pagination) {
 function loadAgenciesForFilter() {
     return new Promise((resolve, reject) => {
         console.log('=== CARGANDO AGENCIAS PARA FILTRO ===');
-        
+
         const agencySelect = document.getElementById('agency-filtro');
         if (!agencySelect) {
             console.error('❌ No se encontró el select agency-filtro');
@@ -2646,55 +2648,55 @@ function loadAgenciesForFilter() {
             .then(response => response.json())
             .then(data => {
                 console.log('✅ Respuesta del servidor para agencias:', data);
-                
+
                 if (data.success && data.data && data.data.length > 0) {
                     console.log(`📋 Procesando ${data.data.length} agencias encontradas`);
-                    
+
                     // Limpiar y llenar el select
                     agencySelect.innerHTML = `
                         <option value="todas">Todas las fuentes</option>
                         <option value="sin_agencia">Reservas directas (sin agencia)</option>
                     `;
-                    
+
                     // Añadir cada agencia como opción
                     data.data.forEach((agency, index) => {
                         console.log(`📝 Procesando agencia ${index + 1}:`, agency);
-                        
+
                         const option = document.createElement('option');
                         option.value = agency.id;
-                        
+
                         // Construir nombre para mostrar
                         let displayName = agency.agency_name;
-                        
+
                         // Añadir inicial si existe y es diferente de 'A'
                         if (agency.inicial_localizador && agency.inicial_localizador !== 'A') {
                             displayName += ` (${agency.inicial_localizador})`;
                         }
-                        
+
                         // Añadir número de reservas si las tiene
                         if (agency.reservas_count && agency.reservas_count > 0) {
                             displayName += ` - ${agency.reservas_count} reservas`;
                         }
-                        
+
                         // Marcar como inactiva si no está activa
                         if (agency.status !== 'active') {
                             displayName += ` [INACTIVA]`;
                             option.style.color = '#dc3545';
                             option.style.fontStyle = 'italic';
                         }
-                        
+
                         option.textContent = displayName;
                         agencySelect.appendChild(option);
-                        
+
                         console.log(`✅ Agencia añadida: ID=${agency.id}, Nombre="${displayName}"`);
                     });
-                    
+
                     console.log(`🎉 Total de ${data.data.length} agencias cargadas en el selector`);
                     resolve();
-                    
+
                 } else {
                     console.warn('⚠️ No se encontraron agencias o respuesta vacía');
-                    
+
                     // Opción por defecto si no hay agencias
                     agencySelect.innerHTML = `
                         <option value="todas">Todas las fuentes</option>
@@ -2706,7 +2708,7 @@ function loadAgenciesForFilter() {
             })
             .catch(error => {
                 console.error('❌ Error de conexión cargando agencias:', error);
-                
+
                 // Opción de error
                 agencySelect.innerHTML = `
                     <option value="todas">Todas las fuentes</option>
@@ -3054,9 +3056,9 @@ function renderSearchResults(data) {
 <!-- ✅ AÑADIR TAMBIÉN AQUÍ -->
 <button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
 ${reserva.estado !== 'cancelada' ?
-    `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
-    `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
-}
+                    `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
+                    `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
+                }
     </td>
                 </tr>
             `;
@@ -6571,9 +6573,6 @@ function renderAgencyProfile(agencyData) {
                 <button class="btn-primary" onclick="saveAgencyProfile()">
                     💾 Guardar Cambios
                 </button>
-                <button class="btn-secondary" onclick="resetAgencyProfile()">
-                    🔄 Resetear Cambios
-                </button>
                 <button class="btn-secondary" onclick="goBackToDashboard()">
                     ← Volver al Dashboard
                 </button>
@@ -6589,12 +6588,12 @@ function renderAgencyProfile(agencyData) {
                             <div class="form-group">
                                 <label for="agency_name">Nombre de la Agencia *</label>
                                 <input type="text" id="agency_name" name="agency_name" 
-                                       value="${escapeHtml(agencyData.agency_name)}" required>
+                                       value="${escapeHtml(agencyData.agency_name)}" required disabled>
                             </div>
                             <div class="form-group">
                                 <label for="contact_person">Persona de Contacto *</label>
                                 <input type="text" id="contact_person" name="contact_person" 
-                                       value="${escapeHtml(agencyData.contact_person)}" required>
+                                       value="${escapeHtml(agencyData.contact_person)}" required disabled>
                             </div>
                         </div>
                     </div>
@@ -6606,13 +6605,13 @@ function renderAgencyProfile(agencyData) {
                             <div class="form-group">
                                 <label for="email">Email de Contacto *</label>
                                 <input type="email" id="email" name="email" 
-                                       value="${escapeHtml(agencyData.email)}" required>
+                                       value="${escapeHtml(agencyData.email)}" required disabled>
                                 <small class="form-help">Email principal de la agencia</small>
                             </div>
                             <div class="form-group">
                                 <label for="phone">Teléfono</label>
                                 <input type="tel" id="phone" name="phone" 
-                                       value="${escapeHtml(agencyData.phone || '')}" placeholder="957 123 456">
+                                       value="${escapeHtml(agencyData.phone || '')}" placeholder="957 123 456" disabled>
                             </div>
                         </div>
                     </div>
@@ -6625,19 +6624,19 @@ function renderAgencyProfile(agencyData) {
                     <label for="razon_social">Razón Social</label>
                     <input type="text" id="razon_social" name="razon_social" 
                            value="${escapeHtml(agencyData.razon_social || '')}" 
-                           placeholder="Denominación social oficial">
+                           placeholder="Denominación social oficial" disabled>
                 </div>
                 <div class="form-group">
                     <label for="cif">CIF/NIF</label>
                     <input type="text" id="cif" name="cif" 
                            value="${escapeHtml(agencyData.cif || '')}" 
-                           placeholder="B12345678">
+                           placeholder="B12345678" disabled>
                 </div>
                 <div class="form-group form-group-full">
                     <label for="domicilio_fiscal">Domicilio Fiscal</label>
                     <input type="text" id="domicilio_fiscal" name="domicilio_fiscal" 
                            value="${escapeHtml(agencyData.domicilio_fiscal || '')}"
-                           placeholder="Dirección fiscal completa">
+                           placeholder="Dirección fiscal completa" disabled>
                 </div>
             </div>
         </div>
@@ -6659,7 +6658,7 @@ function renderAgencyProfile(agencyData) {
                         <h3>📍 Dirección</h3>
                         <div class="form-group">
                             <label for="address">Dirección Completa</label>
-                            <textarea id="address" name="address" rows="3" 
+                            <textarea disabled id="address" name="address" rows="3" 
                                       placeholder="Calle, número, código postal, ciudad...">${escapeHtml(agencyData.address || '')}</textarea>
                         </div>
                     </div>
@@ -6670,7 +6669,7 @@ function renderAgencyProfile(agencyData) {
                         <div class="form-group">
                             <label for="notes">Notas Internas</label>
                             <textarea id="notes" name="notes" rows="4" 
-                                      placeholder="Información adicional sobre la agencia...">${escapeHtml(agencyData.notes || '')}</textarea>
+                                      placeholder="Información adicional sobre la agencia..." disabled>${escapeHtml(agencyData.notes || '')}</textarea>
                             <small class="form-help">Estas notas son visibles solo para los administradores</small>
                         </div>
                     </div>
@@ -9055,7 +9054,7 @@ function isValidEmail(email) {
  */
 function downloadTicketPDF(reservaId, localizador) {
     console.log('📄 Descargando PDF para reserva:', reservaId, localizador);
-    
+
     if (!reservaId || !localizador) {
         alert('❌ Datos de reserva no válidos');
         return;
@@ -9073,33 +9072,33 @@ function downloadTicketPDF(reservaId, localizador) {
         method: 'POST',
         body: formData
     })
-    .then(response => response.json())
-    .then(data => {
-        hidePDFLoadingIndicator();
-        
-        if (data.success && data.data.pdf_url) {
-            console.log('✅ PDF generado exitosamente');
-            
-            // Descargar automáticamente
-            const link = document.createElement('a');
-            link.href = data.data.pdf_url;
-            link.download = data.data.filename || `billete_${localizador}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            // Mostrar mensaje de éxito
-            showTemporaryNotification('✅ PDF descargado correctamente', 'success', 3000);
-        } else {
-            console.error('❌ Error generando PDF:', data.data);
-            alert('❌ Error generando el PDF: ' + (data.data || 'Error desconocido'));
-        }
-    })
-    .catch(error => {
-        hidePDFLoadingIndicator();
-        console.error('❌ Error de conexión:', error);
-        alert('❌ Error de conexión al generar el PDF');
-    });
+        .then(response => response.json())
+        .then(data => {
+            hidePDFLoadingIndicator();
+
+            if (data.success && data.data.pdf_url) {
+                console.log('✅ PDF generado exitosamente');
+
+                // Descargar automáticamente
+                const link = document.createElement('a');
+                link.href = data.data.pdf_url;
+                link.download = data.data.filename || `billete_${localizador}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Mostrar mensaje de éxito
+                showTemporaryNotification('✅ PDF descargado correctamente', 'success', 3000);
+            } else {
+                console.error('❌ Error generando PDF:', data.data);
+                alert('❌ Error generando el PDF: ' + (data.data || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            hidePDFLoadingIndicator();
+            console.error('❌ Error de conexión:', error);
+            alert('❌ Error de conexión al generar el PDF');
+        });
 }
 
 /**
@@ -9124,12 +9123,12 @@ function showPDFLoadingIndicator() {
             gap: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         `;
-        
+
         indicator.innerHTML = `
             <div style="width: 20px; height: 20px; border: 2px solid #ffffff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
             <span>Generando PDF...</span>
         `;
-        
+
         // Añadir animación CSS
         if (!document.getElementById('pdf-spinner-style')) {
             const style = document.createElement('style');
@@ -9142,7 +9141,7 @@ function showPDFLoadingIndicator() {
             `;
             document.head.appendChild(style);
         }
-        
+
         document.body.appendChild(indicator);
     } else {
         document.getElementById('pdf-loading-indicator').style.display = 'flex';

@@ -139,26 +139,8 @@ function generar_formulario_redsys($reserva_data) {
 }
 
 function is_production_environment() {
-    // ✅ CAMBIAR ESTO: Detectar si estamos en producción
-    $site_url = site_url();
-    
-    error_log("Site URL: " . $site_url);
-    
-    // Detectar si es producción (NO contiene palabras de desarrollo)
-    $is_prod = !strpos($site_url, 'localhost') && 
-               !strpos($site_url, '.local') && 
-               !strpos($site_url, 'dev.') &&
-               !strpos($site_url, 'staging.') &&
-               !strpos($site_url, 'test.');
-    
-    // ✅ FORZAR A PRODUCCIÓN SI EL DOMINIO ES EL REAL
-    if (strpos($site_url, 'autobusmedinaazahara.com') !== false) {
-        $is_prod = true;
-    }
-    
-    error_log("Es producción: " . ($is_prod ? 'SÍ' : 'NO'));
-    
-    return $is_prod;
+    // ✅ FORZAR PRODUCCIÓN
+    return true;
 }
 
 function guardar_datos_pedido($order_id, $reserva_data) {

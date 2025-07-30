@@ -132,7 +132,8 @@ function generar_formulario_redsys($reserva_data) {
 }
 
 function is_production_environment() {
-    return false; // ← FORZADO a entorno de pruebas
+    // ✅ FORZAR PRODUCCIÓN
+    return true;
 }
 
 function process_successful_payment($order_id, $params) {

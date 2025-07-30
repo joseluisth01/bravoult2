@@ -255,8 +255,6 @@ class ReservasDashboard
                         <h3>Funciones Disponibles</h3>
                         <div class="action-buttons">
                             <button class="action-btn" onclick="alert('Próximamente: Gestión de reservas para agencias')">🎫 Mis Reservas</button>
-                            <button class="action-btn" onclick="alert('Próximamente: Crear nueva reserva')">➕ Nueva Reserva</button>
-                            <button class="action-btn" onclick="alert('Próximamente: Historial de comisiones')">💰 Comisiones</button>
                             <button class="action-btn" onclick="loadAgencyProfile()">👤 Mi Perfil</button>
                             <button class="action-btn" onclick="initAgencyReservaRapida()" style="background: linear-gradient(135deg, #0073aa 0%, #005177 100%); border-left: 4px solid #003f5c;">⚡ Reserva Rápida</button>
                         </div>
