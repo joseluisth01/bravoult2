@@ -130,7 +130,7 @@ function is_production_environment() {
 }
 
 function process_successful_payment($order_id, $params) {
-    error_log('=== PROCESANDO PAGO EXITOSO ===');
+    error_log('=== PROCESANDO PAGO EXITOSO CON REDSYS ===');
     error_log("Order ID: $order_id");
     
     // Recuperar datos de la reserva
@@ -174,11 +174,31 @@ function process_successful_payment($order_id, $params) {
         if ($result['success']) {
             error_log('✅ Reserva procesada exitosamente: ' . $result['data']['localizador']);
             
-            // Guardar datos para la página de confirmación
+            // ✅ GUARDAR EN MÚLTIPLES LUGARES PARA ASEGURAR QUE LLEGUE A LA PÁGINA DE CONFIRMACIÓN
             if (!session_id()) {
                 session_start();
             }
+            
+            // 1. Guardar en sesión
             $_SESSION['confirmed_reservation'] = $result['data'];
+            
+            // 2. Guardar en transient con el order_id
+            set_transient('confirmed_reservation_' . $order_id, $result['data'], 3600);
+            
+            // 3. Guardar con el localizador también
+            set_transient('confirmed_reservation_loc_' . $result['data']['localizador'], $result['data'], 3600);
+            
+            // 4. ✅ NUEVO: Guardar en base de datos temporal para mayor seguridad
+            global $wpdb;
+            $table_temp = $wpdb->prefix . 'options'; // Usar tabla options como temporal
+            
+            update_option('temp_reservation_' . $order_id, $result['data'], false);
+            update_option('temp_reservation_loc_' . $result['data']['localizador'], $result['data'], false);
+            
+            error_log('✅ Datos de confirmación guardados en múltiples ubicaciones');
+            error_log('- Sesión: ' . print_r($_SESSION['confirmed_reservation'], true));
+            error_log('- Transient order: confirmed_reservation_' . $order_id);
+            error_log('- Transient loc: confirmed_reservation_loc_' . $result['data']['localizador']);
             
             // Limpiar datos temporales
             delete_transient('redsys_order_' . $order_id);
@@ -196,6 +216,75 @@ function process_successful_payment($order_id, $params) {
         error_log('❌ Excepción procesando pago exitoso: ' . $e->getMessage());
         return false;
     }
+}
+
+function get_reservation_data_for_confirmation() {
+    error_log('=== INTENTANDO RECUPERAR DATOS DE CONFIRMACIÓN ===');
+    
+    // ✅ Método 1: Desde URL (order_id)
+    if (isset($_GET['order']) && !empty($_GET['order'])) {
+        $order_id = sanitize_text_field($_GET['order']);
+        error_log('Order ID desde URL: ' . $order_id);
+        
+        // Buscar en transients
+        $data = get_transient('confirmed_reservation_' . $order_id);
+        if ($data) {
+            error_log('✅ Datos encontrados en transient por order_id');
+            return $data;
+        }
+        
+        // Buscar en options temporales
+        $data = get_option('temp_reservation_' . $order_id);
+        if ($data) {
+            error_log('✅ Datos encontrados en options por order_id');
+            // Limpiar después de usar
+            delete_option('temp_reservation_' . $order_id);
+            return $data;
+        }
+    }
+    
+    // ✅ Método 2: Desde sesión
+    if (!session_id()) {
+        session_start();
+    }
+    
+    if (isset($_SESSION['confirmed_reservation'])) {
+        error_log('✅ Datos encontrados en sesión');
+        $data = $_SESSION['confirmed_reservation'];
+        // Limpiar sesión después de usar
+        unset($_SESSION['confirmed_reservation']);
+        return $data;
+    }
+    
+    // ✅ Método 3: Buscar la reserva más reciente del último minuto
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    
+    $recent_reservation = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_reservas 
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+         AND metodo_pago = 'redsys'
+         ORDER BY created_at DESC 
+         LIMIT 1"
+    ));
+    
+    if ($recent_reservation) {
+        error_log('✅ Reserva reciente encontrada en BD: ' . $recent_reservation->localizador);
+        
+        return array(
+            'localizador' => $recent_reservation->localizador,
+            'reserva_id' => $recent_reservation->id,
+            'detalles' => array(
+                'fecha' => $recent_reservation->fecha,
+                'hora' => $recent_reservation->hora,
+                'personas' => $recent_reservation->total_personas,
+                'precio_final' => $recent_reservation->precio_final
+            )
+        );
+    }
+    
+    error_log('❌ No se encontraron datos de confirmación por ningún método');
+    return null;
 }
 
 function guardar_datos_pedido($order_id, $reserva_data) {

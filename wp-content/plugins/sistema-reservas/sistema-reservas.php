@@ -845,6 +845,8 @@ private function load_dependencies()
 // ✅ SHORTCODE PARA PÁGINA DE CONFIRMACIÓN ACTUALIZADA - EXACTO AL DISEÑO
 add_shortcode('confirmacion_reserva', 'confirmacion_reserva_shortcode');
 
+add_shortcode('confirmacion_reserva', 'confirmacion_reserva_shortcode');
+
 function confirmacion_reserva_shortcode()
 {
     ob_start();
@@ -883,21 +885,6 @@ function confirmacion_reserva_shortcode()
             font-family: 'Duran-Regular';
         }
 
-        .success-banner .divider {
-            width: 80px;
-            height: 4px;
-            background: #F4D03F;
-            margin: 20px auto;
-            border-radius: 2px;
-        }
-
-        .success-banner p {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 500;
-            opacity: 0.95;
-        }
-
         .content-section {
             background: #FFFFFF;
             padding: 40px 30px;
@@ -925,7 +912,6 @@ function confirmacion_reserva_shortcode()
             font-family: 'Duran-Regular';
         }
 
-
         .boarding-message {
             color: #2D2D2D;
             font-size: 16px;
@@ -941,82 +927,12 @@ function confirmacion_reserva_shortcode()
             justify-content: space-between;
         }
 
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.3s;
-            min-width: 250px;
-            gap: 10px;
-        }
-
         .arrival-info {
-            display: none;
-        }
-
-        .btn-view {
-            background: #F4D03F;
-            color: #2D2D2D;
-            border: 2px solid #F4D03F;
-        }
-
-        .btn-view:hover {
-            background: #F1C40F;
-            border-color: #F1C40F;
-            color: #2D2D2D;
-            text-decoration: none;
-        }
-
-        .btn-download {
-            background: transparent;
-            color: #2D2D2D;
-            border: 2px solid #F4D03F;
-        }
-
-        .btn-download:hover {
-            background: #F4D03F;
-            color: #2D2D2D;
-            text-decoration: none;
-        }
-
-        @media (max-width: 600px) {
-            .confirmacion-container {
-                margin: 20px;
-                max-width: none;
-            }
-
-            .success-banner {
-                padding: 30px 20px;
-            }
-
-            .success-banner h1 {
-                font-size: 28px;
-            }
-
-            .content-section {
-                padding: 30px 20px;
-            }
-
-            .btn {
-                min-width: 200px;
-            }
-        }
-
-        /* Loading y error states */
-        .loading-state {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            color: #666;
-            font-style: italic;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-weight: 600;
         }
 
         .complete-btn {
@@ -1037,21 +953,6 @@ function confirmacion_reserva_shortcode()
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
 
-        .error-state {
-            color: #E74C3C;
-            font-weight: 600;
-        }
-
-        /* Ocultar botones inicialmente */
-        .action-buttons {
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-
-        .action-buttons.loaded {
-            opacity: 1;
-        }
-
         .back-btn {
             color: black;
             border: none;
@@ -1065,10 +966,56 @@ function confirmacion_reserva_shortcode()
             background: none !important;
             margin-bottom: 10px;
         }
+
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: #666;
+            font-style: italic;
+        }
+
+        .error-state {
+            color: #E74C3C;
+            font-weight: 600;
+        }
+
+        .action-buttons {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .action-buttons.loaded {
+            opacity: 1;
+        }
+
+        @media (max-width: 600px) {
+            .confirmacion-container {
+                margin: 20px;
+                max-width: none;
+            }
+
+            .success-banner {
+                padding: 30px 20px;
+            }
+
+            .success-banner h1 {
+                font-size: 28px;
+            }
+
+            .content-section {
+                padding: 30px 20px;
+            }
+
+            .complete-btn {
+                min-width: 200px;
+                padding: 15px 50px;
+            }
+        }
     </style>
 
     <div class="confirmacion-container container">
-        <!-- Banner principal -->
         <button type="button" class="back-btn" onclick="goBackInicio()">
             <img src="https://autobusmedinaazahara.com/wp-content/uploads/2025/07/Vector-15.svg" alt="">VOLVER AL INICIO
         </button>
@@ -1076,7 +1023,6 @@ function confirmacion_reserva_shortcode()
             <h1>¡GRACIAS POR TU RESERVA!</h1>
         </div>
 
-        <!-- Contenido principal -->
         <div class="content-section">
             <div class="thank-you-message">
                 <p>En <strong>Autocares Bravo</strong> estamos agradecidos por tu confianza para el viaje a las ruinas de <strong>Medina Azahara</strong>. Nos hace ilusión acompañarte: tú disfruta de la experiencia, nosotros cuidamos del trayecto.</p>
@@ -1094,7 +1040,6 @@ function confirmacion_reserva_shortcode()
                 ¡Nos vemos a bordo!
             </div>
 
-            <!-- Botones de acción -->
             <div class="action-buttons" id="action-buttons">
                 <button class="complete-btn" onclick="viewTicket()">
                     VER COMPROBANTE
@@ -1108,46 +1053,123 @@ function confirmacion_reserva_shortcode()
 
     <script>
         let reservationData = null;
+        const ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
 
-        // Cargar datos al iniciar la página
+        // ✅ CARGAR DATOS AL INICIAR LA PÁGINA - MEJORADO
         window.addEventListener('DOMContentLoaded', function() {
+            console.log('=== PÁGINA DE CONFIRMACIÓN CARGADA ===');
             loadReservationData();
         });
 
         function goBackInicio() {
-            // Opción 1: Volver a la página de inicio del sitio
-            window.location.href = '/';
-
-            // Opción 2: Si tienes una página específica de reservas, descomenta esta línea:
-            // window.location.href = '/reservas/';
-
-            // Opción 3: Si quieres usar la URL base de WordPress dinámicamente:
-            // window.location.href = '<?php echo home_url('/'); ?>';
+            window.location.href = '<?php echo home_url('/'); ?>';
         }
 
+        // ✅ FUNCIÓN COMPLETAMENTE NUEVA PARA CARGAR DATOS
         function loadReservationData() {
+            console.log('=== INTENTANDO CARGAR DATOS DE RESERVA ===');
+            
+            // ✅ Método 1: Desde sessionStorage (frontend)
             try {
                 const confirmedData = sessionStorage.getItem('confirmedReservation');
-
                 if (confirmedData) {
                     reservationData = JSON.parse(confirmedData);
-                    console.log('✅ Datos de confirmación cargados:', reservationData);
-
+                    console.log('✅ Datos encontrados en sessionStorage:', reservationData);
                     updateArrivalInfo();
                     enableActionButtons();
-
-                    // Limpiar sessionStorage después de cargar
                     sessionStorage.removeItem('confirmedReservation');
-                } else {
-                    console.log('⚠️ No hay datos de confirmación en sessionStorage');
-                    showGenericInfo();
-                    enableActionButtons(); // Habilitar botones aunque no haya datos específicos
+                    return;
                 }
             } catch (error) {
-                console.error('❌ Error cargando datos de confirmación:', error);
+                console.warn('⚠️ Error leyendo sessionStorage:', error);
+            }
+            
+            // ✅ Método 2: Desde URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('order');
+            
+            console.log('Order ID desde URL:', orderId);
+            
+            if (orderId) {
+                // Solicitar datos al servidor
+                fetchReservationFromServer(orderId);
+                return;
+            }
+            
+            // ✅ Método 3: Solicitar la reserva más reciente
+            console.log('🔍 Solicitando reserva más reciente...');
+            fetchMostRecentReservation();
+        }
+
+        // ✅ NUEVA FUNCIÓN PARA OBTENER DATOS DEL SERVIDOR
+        function fetchReservationFromServer(orderId) {
+            console.log('📡 Solicitando datos al servidor para order:', orderId);
+            
+            fetch(ajaxurl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    action: 'get_confirmed_reservation_data',
+                    order_id: orderId,
+                    nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('📡 Respuesta del servidor:', data);
+                
+                if (data.success && data.data) {
+                    reservationData = data.data;
+                    console.log('✅ Datos de reserva cargados desde servidor');
+                    updateArrivalInfo();
+                    enableActionButtons();
+                } else {
+                    console.error('❌ Error del servidor:', data.data);
+                    fetchMostRecentReservation(); // Fallback
+                }
+            })
+            .catch(error => {
+                console.error('❌ Error solicitando datos:', error);
+                fetchMostRecentReservation(); // Fallback
+            });
+        }
+
+        // ✅ NUEVA FUNCIÓN PARA OBTENER RESERVA MÁS RECIENTE
+        function fetchMostRecentReservation() {
+            console.log('📡 Solicitando reserva más reciente...');
+            
+            fetch(ajaxurl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    action: 'get_most_recent_reservation',
+                    nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('📡 Respuesta reserva reciente:', data);
+                
+                if (data.success && data.data) {
+                    reservationData = data.data;
+                    console.log('✅ Reserva reciente cargada');
+                    updateArrivalInfo();
+                    enableActionButtons();
+                } else {
+                    console.error('❌ No se encontró reserva reciente');
+                    showGenericInfo();
+                    enableActionButtons();
+                }
+            })
+            .catch(error => {
+                console.error('❌ Error cargando reserva reciente:', error);
                 showErrorInfo();
                 enableActionButtons();
-            }
+            });
         }
 
         function updateArrivalInfo() {
@@ -1160,7 +1182,6 @@ function confirmacion_reserva_shortcode()
             const fecha = detalles.fecha || 'Fecha no disponible';
             const hora = detalles.hora || 'Hora no disponible';
 
-            // Formatear fecha si es posible
             let fechaFormateada = fecha;
             try {
                 const fechaObj = new Date(fecha + 'T00:00:00');
@@ -1170,10 +1191,9 @@ function confirmacion_reserva_shortcode()
                     month: 'long',
                     day: 'numeric'
                 });
-                // Capitalizar primera letra
                 fechaFormateada = fechaFormateada.charAt(0).toUpperCase() + fechaFormateada.slice(1);
             } catch (e) {
-                console.log('No se pudo formatear la fecha, usando formato original');
+                console.log('No se pudo formatear la fecha');
             }
 
             const arrivalText = `📍 ${fechaFormateada} a las ${hora}`;
@@ -1194,98 +1214,95 @@ function confirmacion_reserva_shortcode()
         }
 
         function viewTicket() {
+            console.log('🎫 Solicitando ver comprobante');
+            console.log('Datos disponibles:', reservationData);
+            
             if (!reservationData || !reservationData.localizador) {
                 alert('No se encontraron datos de la reserva. Por favor, revisa tu email para ver el comprobante.');
                 return;
             }
 
-            // Mostrar modal de carga
             showLoadingModal('Generando comprobante...');
-
-            // Solicitar PDF al servidor
             generateAndViewPDF();
         }
 
         function downloadTicket() {
+            console.log('⬇️ Solicitando descargar comprobante');
+            console.log('Datos disponibles:', reservationData);
+            
             if (!reservationData || !reservationData.localizador) {
                 alert('No se encontraron datos de la reserva. Por favor, revisa tu email para descargar el comprobante.');
                 return;
             }
 
-            // Mostrar modal de carga
             showLoadingModal('Preparando descarga...');
-
-            // Solicitar PDF para descarga
             generateAndDownloadPDF();
         }
 
         function generateAndViewPDF() {
-            fetch(ajaxurl || '/wp-admin/admin-ajax.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        action: 'generate_ticket_pdf_view',
-                        localizador: reservationData.localizador,
-                        nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
-                    })
+            fetch(ajaxurl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    action: 'generate_ticket_pdf_view',
+                    localizador: reservationData.localizador,
+                    nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
                 })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoadingModal();
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoadingModal();
 
-                    if (data.success && data.data.pdf_url) {
-                        // Abrir PDF en nueva ventana
-                        window.open(data.data.pdf_url, '_blank');
-                    } else {
-                        alert('Error generando el comprobante: ' + (data.data || 'Error desconocido'));
-                    }
-                })
-                .catch(error => {
-                    hideLoadingModal();
-                    console.error('Error:', error);
-                    alert('Error de conexión al generar el comprobante');
-                });
+                if (data.success && data.data.pdf_url) {
+                    window.open(data.data.pdf_url, '_blank');
+                } else {
+                    alert('Error generando el comprobante: ' + (data.data || 'Error desconocido'));
+                }
+            })
+            .catch(error => {
+                hideLoadingModal();
+                console.error('Error:', error);
+                alert('Error de conexión al generar el comprobante');
+            });
         }
 
         function generateAndDownloadPDF() {
-            fetch(ajaxurl || '/wp-admin/admin-ajax.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        action: 'generate_ticket_pdf_download',
-                        localizador: reservationData.localizador,
-                        nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
-                    })
+            fetch(ajaxurl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    action: 'generate_ticket_pdf_download',
+                    localizador: reservationData.localizador,
+                    nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
                 })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoadingModal();
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoadingModal();
 
-                    if (data.success && data.data.pdf_url) {
-                        // Crear link de descarga
-                        const link = document.createElement('a');
-                        link.href = data.data.pdf_url;
-                        link.download = `billete_${reservationData.localizador}.pdf`;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    } else {
-                        alert('Error preparando la descarga: ' + (data.data || 'Error desconocido'));
-                    }
-                })
-                .catch(error => {
-                    hideLoadingModal();
-                    console.error('Error:', error);
-                    alert('Error de conexión al preparar la descarga');
-                });
+                if (data.success && data.data.pdf_url) {
+                    const link = document.createElement('a');
+                    link.href = data.data.pdf_url;
+                    link.download = `billete_${reservationData.localizador}.pdf`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } else {
+                    alert('Error preparando la descarga: ' + (data.data || 'Error desconocido'));
+                }
+            })
+            .catch(error => {
+                hideLoadingModal();
+                console.error('Error:', error);
+                alert('Error de conexión al preparar la descarga');
+            });
         }
 
         function showLoadingModal(message) {
-            // Crear modal de carga si no existe
             let modal = document.getElementById('loading-modal');
             if (!modal) {
                 modal = document.createElement('div');
@@ -1331,9 +1348,6 @@ function confirmacion_reserva_shortcode()
                 modal.style.display = 'none';
             }
         }
-
-        // Variables globales para AJAX
-        const ajaxurl = '<?php echo admin_url('admin-ajax.php'); ?>';
     </script>
 <?php
     return ob_get_clean();
@@ -1777,6 +1791,191 @@ function get_confirmed_reservation_data() {
     }
 }
 
+
+add_action('wp_ajax_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
+add_action('wp_ajax_nopriv_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
+
+function get_confirmed_reservation_data() {
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+    
+    $order_id = sanitize_text_field($_POST['order_id'] ?? '');
+    
+    error_log('=== GET_CONFIRMED_RESERVATION_DATA ===');
+    error_log('Order ID solicitado: ' . $order_id);
+    
+    if (empty($order_id)) {
+        wp_send_json_error('Order ID no proporcionado');
+        return;
+    }
+    
+    try {
+        // ✅ Cargar función helper si no existe
+        if (!function_exists('get_reservation_data_for_confirmation')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-redsys-handler.php';
+        }
+        
+        // Buscar primero en transients
+        $data = get_transient('confirmed_reservation_' . $order_id);
+        if ($data) {
+            error_log('✅ Datos encontrados en transient');
+            wp_send_json_success($data);
+            return;
+        }
+        
+        // Buscar en options temporales
+        $data = get_option('temp_reservation_' . $order_id);
+        if ($data) {
+            error_log('✅ Datos encontrados en options temporales');
+            delete_option('temp_reservation_' . $order_id); // Limpiar después de usar
+            wp_send_json_success($data);
+            return;
+        }
+        
+        // Buscar por localizador si viene en el order_id
+        $data = get_option('temp_reservation_loc_' . $order_id);
+        if ($data) {
+            error_log('✅ Datos encontrados en options por localizador');
+            delete_option('temp_reservation_loc_' . $order_id);
+            wp_send_json_success($data);
+            return;
+        }
+        
+        // ✅ Fallback: Buscar en base de datos por redsys_order_id
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        
+        $reserva = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_reservas 
+             WHERE redsys_order_id = %s
+             ORDER BY created_at DESC 
+             LIMIT 1",
+            $order_id
+        ));
+        
+        if ($reserva) {
+            error_log('✅ Reserva encontrada en BD por redsys_order_id');
+            
+            $response_data = array(
+                'localizador' => $reserva->localizador,
+                'reserva_id' => $reserva->id,
+                'detalles' => array(
+                    'fecha' => $reserva->fecha,
+                    'hora' => $reserva->hora,
+                    'personas' => $reserva->total_personas,
+                    'precio_final' => $reserva->precio_final
+                )
+            );
+            
+            wp_send_json_success($response_data);
+            return;
+        }
+        
+        error_log('❌ No se encontraron datos de confirmación para order_id: ' . $order_id);
+        wp_send_json_error('Reserva no encontrada');
+        
+    } catch (Exception $e) {
+        error_log('Error cargando datos de confirmación: ' . $e->getMessage());
+        wp_send_json_error('Error interno del servidor: ' . $e->getMessage());
+    }
+}
+
+add_action('wp_ajax_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
+add_action('wp_ajax_nopriv_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
+
+function get_confirmed_reservation_data() {
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+    
+    $order_id = sanitize_text_field($_POST['order_id'] ?? '');
+    
+    error_log('=== GET_MOST_RECENT_RESERVATION ===');
+    
+    try {
+        // ✅ Primero verificar en sesión
+        if (!session_id()) {
+            session_start();
+        }
+        
+        if (isset($_SESSION['confirmed_reservation'])) {
+            error_log('✅ Datos encontrados en sesión');
+            $data = $_SESSION['confirmed_reservation'];
+            unset($_SESSION['confirmed_reservation']); // Limpiar después de usar
+            wp_send_json_success($data);
+            return;
+        }
+        
+        // ✅ Buscar en base de datos
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        
+        // Buscar reservas de los últimos 5 minutos con pago Redsys
+        $recent_reservation = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_reservas 
+             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+             AND metodo_pago = 'redsys'
+             AND estado = 'confirmada'
+             ORDER BY created_at DESC 
+             LIMIT 1"
+        ));
+        
+        if ($recent_reservation) {
+            error_log('✅ Reserva reciente encontrada: ' . $recent_reservation->localizador);
+            
+            $response_data = array(
+                'localizador' => $recent_reservation->localizador,
+                'reserva_id' => $recent_reservation->id,
+                'detalles' => array(
+                    'fecha' => $recent_reservation->fecha,
+                    'hora' => $recent_reservation->hora,
+                    'personas' => $recent_reservation->total_personas,
+                    'precio_final' => $recent_reservation->precio_final
+                )
+            );
+            
+            wp_send_json_success($response_data);
+            return;
+        }
+        
+        // ✅ Si no hay reservas Redsys, buscar cualquier reserva reciente
+        $any_recent = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_reservas 
+             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+             AND estado = 'confirmada'
+             ORDER BY created_at DESC 
+             LIMIT 1"
+        ));
+        
+        if ($any_recent) {
+            error_log('✅ Cualquier reserva reciente encontrada: ' . $any_recent->localizador);
+            
+            $response_data = array(
+                'localizador' => $any_recent->localizador,
+                'reserva_id' => $any_recent->id,
+                'detalles' => array(
+                    'fecha' => $any_recent->fecha,
+                    'hora' => $any_recent->hora,
+                    'personas' => $any_recent->total_personas,
+                    'precio_final' => $any_recent->precio_final
+                )
+            );
+            
+            wp_send_json_success($response_data);
+            return;
+        }
+        
+        error_log('❌ No se encontraron reservas recientes');
+        wp_send_json_error('No se encontraron reservas recientes');
+        
+    } catch (Exception $e) {
+        error_log('Error obteniendo reserva reciente: ' . $e->getMessage());
+        wp_send_json_error('Error interno del servidor: ' . $e->getMessage());
+    }
+}
 
 // Inicializar el plugin
 new SistemaReservas();
