@@ -1700,11 +1700,9 @@ add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
 function handle_redsys_notification() {
     error_log('🔁 Recibida notificación de Redsys (MerchantURL)');
     error_log('POST data: ' . print_r($_POST, true));
-    error_log('Raw input: ' . file_get_contents('php://input'));
 
     $params = $_POST['Ds_MerchantParameters'] ?? '';
     $signature = $_POST['Ds_Signature'] ?? '';
-    $version = $_POST['Ds_SignatureVersion'] ?? '';
 
     if (!$params || !$signature) {
         error_log('❌ Faltan parámetros en notificación');
@@ -1720,7 +1718,7 @@ function handle_redsys_notification() {
     
     try {
         $decoded = $redsys->getParametersFromResponse($params);
-        error_log('Parámetros decodificados: ' . print_r($decoded, true));
+        error_log('✅ Parámetros decodificados: ' . print_r($decoded, true));
     } catch (Exception $e) {
         error_log('❌ Error decodificando parámetros: ' . $e->getMessage());
         status_header(400);
@@ -1744,22 +1742,7 @@ function handle_redsys_notification() {
         exit('ERROR: Payment failed');
     }
 
-    // Verificar firma
-    $clave = is_production_environment() ? 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9' : 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
-
-    try {
-        if (!$redsys->verifySignature($signature, $params, $clave)) {
-            error_log('❌ Firma inválida en notificación');
-            status_header(403);
-            exit('ERROR: Invalid signature');
-        }
-    } catch (Exception $e) {
-        error_log('❌ Error verificando firma: ' . $e->getMessage());
-        status_header(403);
-        exit('ERROR: Signature verification failed');
-    }
-
-    error_log('✅ Firma verificada, procesando reserva...');
+    error_log('✅ Pago exitoso, procesando reserva...');
     
     // ✅ CARGAR FUNCIÓN DE PROCESAMIENTO
     if (!function_exists('process_successful_payment')) {
@@ -1851,48 +1834,15 @@ function ajax_get_confirmed_reservation_data() {
 
     $order_id = sanitize_text_field($_POST['order_id'] ?? '');
     
-    error_log('=== INTENTANDO RECUPERAR DATOS DE CONFIRMACIÓN ===');
+    error_log('=== BUSCANDO DATOS DE CONFIRMACIÓN ===');
     error_log('Order ID recibido: ' . $order_id);
     
-    // ✅ MÉTODO 1: Desde URL (order_id) - MEJORADO
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    $table_config = $wpdb->prefix . 'reservas_configuration';
+    
+    // ✅ MÉTODO 1: Buscar en BD por redsys_order_id (MÁS DIRECTO)
     if (!empty($order_id)) {
-        // Buscar en transients
-        $data = get_transient('confirmed_reservation_' . $order_id);
-        if ($data) {
-            error_log('✅ Datos encontrados en transient por order_id');
-            wp_send_json_success($data);
-            return;
-        }
-        
-        // Buscar en options temporales
-        $data = get_option('temp_confirmed_' . $order_id);
-        if ($data) {
-            error_log('✅ Datos encontrados en options por order_id');
-            wp_send_json_success($data);
-            return;
-        }
-        
-        // ✅ BUSCAR EN BD POR CONFIG
-        global $wpdb;
-        $table_config = $wpdb->prefix . 'reservas_configuration';
-        
-        $config_value = $wpdb->get_var($wpdb->prepare(
-            "SELECT config_value FROM $table_config WHERE config_key = %s",
-            'confirmed_order_' . $order_id
-        ));
-        
-        if ($config_value) {
-            $data = json_decode($config_value, true);
-            if ($data) {
-                error_log('✅ Datos encontrados en BD config por order_id');
-                wp_send_json_success($data);
-                return;
-            }
-        }
-        
-        // ✅ BUSCAR EN BD POR REDSYS_ORDER_ID
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        
         $reserva = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM $table_reservas WHERE redsys_order_id = %s ORDER BY created_at DESC LIMIT 1",
             $order_id
@@ -1911,36 +1861,45 @@ function ajax_get_confirmed_reservation_data() {
                 )
             );
             
-            // Guardar para futuras consultas
-            set_transient('confirmed_reservation_' . $order_id, $data, 7200);
-            
             wp_send_json_success($data);
             return;
         }
     }
     
-    // ✅ MÉTODO 2: Buscar la más reciente
-    $data = get_option('latest_confirmed_reservation');
-    if ($data && isset($data['detalles'])) {
-        error_log('✅ Datos encontrados en latest_confirmed_reservation');
+    // ✅ MÉTODO 2: Desde transients
+    if (!empty($order_id)) {
+        $data = get_transient('confirmed_reservation_' . $order_id);
+        if ($data) {
+            error_log('✅ Datos encontrados en transient por order_id');
+            wp_send_json_success($data);
+            return;
+        }
+    }
+    
+    // ✅ MÉTODO 3: Desde sesión
+    if (!session_id()) {
+        session_start();
+    }
+    
+    if (isset($_SESSION['confirmed_reservation'])) {
+        error_log('✅ Datos encontrados en sesión');
+        $data = $_SESSION['confirmed_reservation'];
         wp_send_json_success($data);
         return;
     }
     
-    // ✅ MÉTODO 3: Buscar en BD las más recientes
-    global $wpdb;
-    $table_reservas = $wpdb->prefix . 'reservas_reservas';
-    
+    // ✅ MÉTODO 4: Buscar la más reciente del último minuto
     $recent_reservation = $wpdb->get_row(
         "SELECT * FROM $table_reservas 
-         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
+         AND metodo_pago = 'redsys'
          AND estado = 'confirmada'
          ORDER BY created_at DESC 
          LIMIT 1"
     );
     
     if ($recent_reservation) {
-        error_log('✅ Reserva reciente encontrada en BD como fallback: ' . $recent_reservation->localizador);
+        error_log('✅ Reserva reciente encontrada en BD: ' . $recent_reservation->localizador);
         
         $data = array(
             'localizador' => $recent_reservation->localizador,

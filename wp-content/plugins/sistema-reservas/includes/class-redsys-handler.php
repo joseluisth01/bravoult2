@@ -133,7 +133,7 @@ function generar_formulario_redsys($reserva_data) {
 
 function is_production_environment() {
     // ✅ FORZAR PRODUCCIÓN
-    return true;
+    return false;
 }
 
 function process_successful_payment($order_id, $params) {

@@ -140,7 +140,7 @@ function generar_formulario_redsys($reserva_data) {
 
 function is_production_environment() {
     // ✅ FORZAR PRODUCCIÓN
-    return true;
+    return false;
 }
 
 function guardar_datos_pedido($order_id, $reserva_data) {
@@ -259,17 +259,17 @@ function process_successful_payment($order_id, $params) {
         return false;
     }
 
-    error_log('✅ Datos de reserva recuperados, procesando...');
+    error_log('✅ Datos de reserva recuperados: ' . print_r($reservation_data, true));
 
     try {
-        // Procesar la reserva usando tu sistema existente
+        // ✅ USAR EL PROCESADOR EXISTENTE PERO CON DATOS CORRECTOS
         if (!class_exists('ReservasProcessor')) {
             require_once RESERVAS_PLUGIN_PATH . 'includes/class-reservas-processor.php';
         }
 
         $processor = new ReservasProcessor();
         
-        // ✅ MEJORAR DATOS PARA EL PROCESADOR
+        // ✅ PREPARAR DATOS CORRECTAMENTE PARA EL PROCESADOR
         $processed_data = array(
             'nombre' => $reservation_data['nombre'] ?? '',
             'apellidos' => $reservation_data['apellidos'] ?? '',
@@ -281,9 +281,9 @@ function process_successful_payment($order_id, $params) {
             'order_id' => $order_id
         );
 
-        error_log('Datos preparados para procesador: ' . print_r($processed_data, true));
+        error_log('✅ Datos preparados para procesador: ' . print_r($processed_data, true));
 
-        // Procesar la reserva usando el método existente
+        // ✅ PROCESAR LA RESERVA
         $result = $processor->process_reservation_payment($processed_data);
         
         if ($result['success']) {
@@ -317,6 +317,8 @@ function process_successful_payment($order_id, $params) {
                     'description' => 'Datos de pedido confirmado'
                 )
             );
+            
+            error_log('✅ Datos de confirmación guardados en múltiples ubicaciones');
             
             // Limpiar datos temporales
             delete_transient('redsys_order_' . $order_id);
