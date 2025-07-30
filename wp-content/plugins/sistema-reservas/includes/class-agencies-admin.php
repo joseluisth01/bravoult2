@@ -156,10 +156,10 @@ public function get_agencies_list()
         global $wpdb;
         $table_name = $wpdb->prefix . 'reservas_agencies';
 
-        // ✅ CONSULTA ACTUALIZADA SIN CAMPOS FINANCIEROS
+        // ✅ CONSULTA ACTUALIZADA CON inicial_localizador
         $agencies = $wpdb->get_results(
             "SELECT id, agency_name, contact_person, email, email_notificaciones, phone, 
-                    username, razon_social, cif, domicilio_fiscal, address, notes,
+                    username, razon_social, cif, domicilio_fiscal, inicial_localizador, address, notes,
                     status, created_at, updated_at 
              FROM $table_name 
              ORDER BY agency_name ASC"
