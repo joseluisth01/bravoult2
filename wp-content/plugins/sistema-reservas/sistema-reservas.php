@@ -1700,6 +1700,7 @@ add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
 function handle_redsys_notification() {
     error_log('🔁 Recibida notificación de Redsys (MerchantURL)');
     error_log('POST data: ' . print_r($_POST, true));
+    error_log('Raw input: ' . file_get_contents('php://input'));
 
     $params = $_POST['Ds_MerchantParameters'] ?? '';
     $signature = $_POST['Ds_Signature'] ?? '';
@@ -1716,9 +1717,15 @@ function handle_redsys_notification() {
     }
 
     $redsys = new RedsysAPI();
-    $decoded = $redsys->getParametersFromResponse($params);
     
-    error_log('Parámetros decodificados: ' . print_r($decoded, true));
+    try {
+        $decoded = $redsys->getParametersFromResponse($params);
+        error_log('Parámetros decodificados: ' . print_r($decoded, true));
+    } catch (Exception $e) {
+        error_log('❌ Error decodificando parámetros: ' . $e->getMessage());
+        status_header(400);
+        exit('ERROR: Invalid parameters');
+    }
 
     $order_id = $decoded['Ds_Order'] ?? null;
     $response_code = $decoded['Ds_Response'] ?? null;
@@ -1740,10 +1747,16 @@ function handle_redsys_notification() {
     // Verificar firma
     $clave = is_production_environment() ? 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9' : 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
 
-    if (!$redsys->verifySignature($signature, $params, $clave)) {
-        error_log('❌ Firma inválida en notificación');
+    try {
+        if (!$redsys->verifySignature($signature, $params, $clave)) {
+            error_log('❌ Firma inválida en notificación');
+            status_header(403);
+            exit('ERROR: Invalid signature');
+        }
+    } catch (Exception $e) {
+        error_log('❌ Error verificando firma: ' . $e->getMessage());
         status_header(403);
-        exit('ERROR: Invalid signature');
+        exit('ERROR: Signature verification failed');
     }
 
     error_log('✅ Firma verificada, procesando reserva...');
@@ -1756,11 +1769,11 @@ function handle_redsys_notification() {
     $ok = process_successful_payment($order_id, $decoded);
 
     if ($ok) {
-        error_log("✅ Reserva procesada correctamente desde notificación");
+        error_log("✅ Reserva procesada correctamente desde notificación para order: $order_id");
         status_header(200);
         echo 'OK';
     } else {
-        error_log("❌ Fallo procesando reserva desde notificación");
+        error_log("❌ Fallo procesando reserva desde notificación para order: $order_id");
         status_header(500);
         echo 'ERROR';
     }
@@ -1841,7 +1854,7 @@ function ajax_get_confirmed_reservation_data() {
     error_log('=== INTENTANDO RECUPERAR DATOS DE CONFIRMACIÓN ===');
     error_log('Order ID recibido: ' . $order_id);
     
-    // ✅ MÉTODO 1: Desde URL (order_id) - CORREGIDO
+    // ✅ MÉTODO 1: Desde URL (order_id) - MEJORADO
     if (!empty($order_id)) {
         // Buscar en transients
         $data = get_transient('confirmed_reservation_' . $order_id);
@@ -1859,8 +1872,25 @@ function ajax_get_confirmed_reservation_data() {
             return;
         }
         
-        // ✅ BUSCAR EN BD POR REDSYS_ORDER_ID - CORREGIDO SIN prepare()
+        // ✅ BUSCAR EN BD POR CONFIG
         global $wpdb;
+        $table_config = $wpdb->prefix . 'reservas_configuration';
+        
+        $config_value = $wpdb->get_var($wpdb->prepare(
+            "SELECT config_value FROM $table_config WHERE config_key = %s",
+            'confirmed_order_' . $order_id
+        ));
+        
+        if ($config_value) {
+            $data = json_decode($config_value, true);
+            if ($data) {
+                error_log('✅ Datos encontrados en BD config por order_id');
+                wp_send_json_success($data);
+                return;
+            }
+        }
+        
+        // ✅ BUSCAR EN BD POR REDSYS_ORDER_ID
         $table_reservas = $wpdb->prefix . 'reservas_reservas';
         
         $reserva = $wpdb->get_row($wpdb->prepare(
@@ -1882,18 +1912,25 @@ function ajax_get_confirmed_reservation_data() {
             );
             
             // Guardar para futuras consultas
-            set_transient('confirmed_reservation_' . $order_id, $data, 3600);
+            set_transient('confirmed_reservation_' . $order_id, $data, 7200);
             
             wp_send_json_success($data);
             return;
         }
     }
     
-    // ✅ MÉTODO 2: Buscar la más reciente en BD - CORREGIDO
+    // ✅ MÉTODO 2: Buscar la más reciente
+    $data = get_option('latest_confirmed_reservation');
+    if ($data && isset($data['detalles'])) {
+        error_log('✅ Datos encontrados en latest_confirmed_reservation');
+        wp_send_json_success($data);
+        return;
+    }
+    
+    // ✅ MÉTODO 3: Buscar en BD las más recientes
     global $wpdb;
     $table_reservas = $wpdb->prefix . 'reservas_reservas';
     
-    // ✅ CONSULTA CORREGIDA SIN ERROR DE prepare()
     $recent_reservation = $wpdb->get_row(
         "SELECT * FROM $table_reservas 
          WHERE created_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)
