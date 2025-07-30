@@ -1741,240 +1741,41 @@ add_action('wp_ajax_get_confirmed_reservation_data', 'get_confirmed_reservation_
 add_action('wp_ajax_nopriv_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
 
 function get_confirmed_reservation_data() {
-    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-        wp_send_json_error('Error de seguridad');
-        return;
+    // Verificar si hay datos en la sesión
+    if (isset($_SESSION['reserva_confirmada'])) {
+        $reserva_data = $_SESSION['reserva_confirmada'];
+        // Limpiar la sesión después de obtener los datos
+        unset($_SESSION['reserva_confirmada']);
+        return $reserva_data;
     }
     
-    $order_id = sanitize_text_field($_POST['order_id'] ?? '');
-    
-    if (empty($order_id)) {
-        wp_send_json_error('Order ID no proporcionado');
-        return;
-    }
-    
-    try {
+    // Si no hay datos en sesión, verificar si hay un ID de reserva en la URL
+    if (isset($_GET['reserva_id'])) {
         global $wpdb;
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        $reserva_id = intval($_GET['reserva_id']);
         
-        // Buscar la reserva más reciente con este order_id (puedes guardar order_id en la tabla)
-        // O buscar por timestamp reciente si no guardas order_id
-        $reserva = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table_reservas 
-             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
-             ORDER BY created_at DESC 
-             LIMIT 1"
-        ));
-        
-        if (!$reserva) {
-            wp_send_json_error('Reserva no encontrada');
-            return;
-        }
-        
-        // Formatear datos igual que en process_successful_payment
-        $response_data = array(
-            'localizador' => $reserva->localizador,
-            'reserva_id' => $reserva->id,
-            'detalles' => array(
-                'fecha' => $reserva->fecha,
-                'hora' => $reserva->hora,
-                'personas' => $reserva->total_personas,
-                'precio_final' => $reserva->precio_final
-            )
-        );
-        
-        wp_send_json_success($response_data);
-        
-    } catch (Exception $e) {
-        error_log('Error cargando datos de confirmación: ' . $e->getMessage());
-        wp_send_json_error('Error interno del servidor');
-    }
-}
-
-
-add_action('wp_ajax_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
-add_action('wp_ajax_nopriv_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
-
-function get_confirmed_reservation_data() {
-    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-        wp_send_json_error('Error de seguridad');
-        return;
-    }
-    
-    $order_id = sanitize_text_field($_POST['order_id'] ?? '');
-    
-    error_log('=== GET_CONFIRMED_RESERVATION_DATA ===');
-    error_log('Order ID solicitado: ' . $order_id);
-    
-    if (empty($order_id)) {
-        wp_send_json_error('Order ID no proporcionado');
-        return;
-    }
-    
-    try {
-        // ✅ Cargar función helper si no existe
-        if (!function_exists('get_reservation_data_for_confirmation')) {
-            require_once RESERVAS_PLUGIN_PATH . 'includes/class-redsys-handler.php';
-        }
-        
-        // Buscar primero en transients
-        $data = get_transient('confirmed_reservation_' . $order_id);
-        if ($data) {
-            error_log('✅ Datos encontrados en transient');
-            wp_send_json_success($data);
-            return;
-        }
-        
-        // Buscar en options temporales
-        $data = get_option('temp_reservation_' . $order_id);
-        if ($data) {
-            error_log('✅ Datos encontrados en options temporales');
-            delete_option('temp_reservation_' . $order_id); // Limpiar después de usar
-            wp_send_json_success($data);
-            return;
-        }
-        
-        // Buscar por localizador si viene en el order_id
-        $data = get_option('temp_reservation_loc_' . $order_id);
-        if ($data) {
-            error_log('✅ Datos encontrados en options por localizador');
-            delete_option('temp_reservation_loc_' . $order_id);
-            wp_send_json_success($data);
-            return;
-        }
-        
-        // ✅ Fallback: Buscar en base de datos por redsys_order_id
-        global $wpdb;
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        
-        $reserva = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table_reservas 
-             WHERE redsys_order_id = %s
-             ORDER BY created_at DESC 
-             LIMIT 1",
-            $order_id
-        ));
+        $reserva = $wpdb->get_row($wpdb->prepare("
+            SELECT r.*, s.nombre as servicio_nombre, s.horario
+            FROM {$wpdb->prefix}reservas_reservas r
+            JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+            WHERE r.id = %d
+        ", $reserva_id));
         
         if ($reserva) {
-            error_log('✅ Reserva encontrada en BD por redsys_order_id');
+            // Obtener pasajeros
+            $pasajeros = $wpdb->get_results($wpdb->prepare("
+                SELECT * FROM {$wpdb->prefix}reservas_pasajeros 
+                WHERE reserva_id = %d
+            ", $reserva_id));
             
-            $response_data = array(
-                'localizador' => $reserva->localizador,
-                'reserva_id' => $reserva->id,
-                'detalles' => array(
-                    'fecha' => $reserva->fecha,
-                    'hora' => $reserva->hora,
-                    'personas' => $reserva->total_personas,
-                    'precio_final' => $reserva->precio_final
-                )
+            return array(
+                'reserva' => $reserva,
+                'pasajeros' => $pasajeros
             );
-            
-            wp_send_json_success($response_data);
-            return;
         }
-        
-        error_log('❌ No se encontraron datos de confirmación para order_id: ' . $order_id);
-        wp_send_json_error('Reserva no encontrada');
-        
-    } catch (Exception $e) {
-        error_log('Error cargando datos de confirmación: ' . $e->getMessage());
-        wp_send_json_error('Error interno del servidor: ' . $e->getMessage());
-    }
-}
-
-add_action('wp_ajax_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
-add_action('wp_ajax_nopriv_get_confirmed_reservation_data', 'get_confirmed_reservation_data');
-
-function get_confirmed_reservation_data() {
-    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-        wp_send_json_error('Error de seguridad');
-        return;
     }
     
-    $order_id = sanitize_text_field($_POST['order_id'] ?? '');
-    
-    error_log('=== GET_MOST_RECENT_RESERVATION ===');
-    
-    try {
-        // ✅ Primero verificar en sesión
-        if (!session_id()) {
-            session_start();
-        }
-        
-        if (isset($_SESSION['confirmed_reservation'])) {
-            error_log('✅ Datos encontrados en sesión');
-            $data = $_SESSION['confirmed_reservation'];
-            unset($_SESSION['confirmed_reservation']); // Limpiar después de usar
-            wp_send_json_success($data);
-            return;
-        }
-        
-        // ✅ Buscar en base de datos
-        global $wpdb;
-        $table_reservas = $wpdb->prefix . 'reservas_reservas';
-        
-        // Buscar reservas de los últimos 5 minutos con pago Redsys
-        $recent_reservation = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table_reservas 
-             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
-             AND metodo_pago = 'redsys'
-             AND estado = 'confirmada'
-             ORDER BY created_at DESC 
-             LIMIT 1"
-        ));
-        
-        if ($recent_reservation) {
-            error_log('✅ Reserva reciente encontrada: ' . $recent_reservation->localizador);
-            
-            $response_data = array(
-                'localizador' => $recent_reservation->localizador,
-                'reserva_id' => $recent_reservation->id,
-                'detalles' => array(
-                    'fecha' => $recent_reservation->fecha,
-                    'hora' => $recent_reservation->hora,
-                    'personas' => $recent_reservation->total_personas,
-                    'precio_final' => $recent_reservation->precio_final
-                )
-            );
-            
-            wp_send_json_success($response_data);
-            return;
-        }
-        
-        // ✅ Si no hay reservas Redsys, buscar cualquier reserva reciente
-        $any_recent = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table_reservas 
-             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
-             AND estado = 'confirmada'
-             ORDER BY created_at DESC 
-             LIMIT 1"
-        ));
-        
-        if ($any_recent) {
-            error_log('✅ Cualquier reserva reciente encontrada: ' . $any_recent->localizador);
-            
-            $response_data = array(
-                'localizador' => $any_recent->localizador,
-                'reserva_id' => $any_recent->id,
-                'detalles' => array(
-                    'fecha' => $any_recent->fecha,
-                    'hora' => $any_recent->hora,
-                    'personas' => $any_recent->total_personas,
-                    'precio_final' => $any_recent->precio_final
-                )
-            );
-            
-            wp_send_json_success($response_data);
-            return;
-        }
-        
-        error_log('❌ No se encontraron reservas recientes');
-        wp_send_json_error('No se encontraron reservas recientes');
-        
-    } catch (Exception $e) {
-        error_log('Error obteniendo reserva reciente: ' . $e->getMessage());
-        wp_send_json_error('Error interno del servidor: ' . $e->getMessage());
-    }
+    return null;
 }
 
 // Inicializar el plugin
