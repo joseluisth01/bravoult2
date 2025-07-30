@@ -1068,11 +1068,48 @@ function confirmacion_reserva_shortcode()
 function loadReservationData() {
     console.log('=== INTENTANDO CARGAR DATOS DE RESERVA ===');
     
-    // ✅ Método 1: Desde URL params
+    // ✅ Método 1: Desde URL params (localizador)
     const urlParams = new URLSearchParams(window.location.search);
+    const localizador = urlParams.get('localizador');
     const orderId = urlParams.get('order');
     
+    console.log('Localizador desde URL:', localizador);
     console.log('Order ID desde URL:', orderId);
+    
+    if (localizador) {
+        // Solicitar datos por localizador
+        fetch(ajaxurl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+                action: 'get_confirmed_reservation_data',
+                localizador: localizador,
+                nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('📡 Respuesta del servidor para localizador:', data);
+            
+            if (data.success && data.data) {
+                reservationData = data.data;
+                console.log('✅ Datos de reserva cargados por localizador');
+                updateArrivalInfo();
+                enableActionButtons();
+                return;
+            } else {
+                console.log('⚠️ No se encontraron datos por localizador, intentando otros métodos...');
+                fetchMostRecentReservation();
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error solicitando datos por localizador:', error);
+            fetchMostRecentReservation();
+        });
+        return;
+    }
     
     if (orderId) {
         // Solicitar datos al servidor usando AJAX
@@ -1700,6 +1737,7 @@ add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
 function handle_redsys_notification() {
     error_log('🔁 Recibida notificación de Redsys (MerchantURL)');
     error_log('POST data: ' . print_r($_POST, true));
+    error_log('GET data: ' . print_r($_GET, true));
 
     $params = $_POST['Ds_MerchantParameters'] ?? '';
     $signature = $_POST['Ds_Signature'] ?? '';
@@ -1762,6 +1800,61 @@ function handle_redsys_notification() {
     }
 
     exit;
+}
+
+
+// ✅ NUEVA FUNCIÓN: Procesar pago cuando llega por URL GET
+add_action('template_redirect', 'check_redsys_return_url');
+
+function check_redsys_return_url() {
+    // Solo ejecutar en la página de confirmación
+    if (!is_page() || get_the_title() !== 'Confirmacion Reserva') {
+        return;
+    }
+    
+    $status = $_GET['status'] ?? '';
+    $order = $_GET['order'] ?? '';
+    
+    error_log('=== VERIFICANDO URL DE RETORNO REDSYS ===');
+    error_log('Status: ' . $status);
+    error_log('Order: ' . $order);
+    
+    if ($status === 'ok' && !empty($order)) {
+        // Verificar si ya procesamos esta reserva
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $table_reservas WHERE redsys_order_id = %s",
+            $order
+        ));
+        
+        if (!$existing) {
+            error_log('🔄 Reserva no encontrada, procesando desde URL...');
+            
+            // Cargar función de procesamiento
+            if (!function_exists('process_successful_payment')) {
+                require_once RESERVAS_PLUGIN_PATH . 'includes/redsys-helper.php';
+            }
+            
+            // Simular parámetros de Redsys para el procesamiento
+            $mock_params = array(
+                'Ds_Order' => $order,
+                'Ds_Response' => '0000', // Código de éxito
+                'Ds_AuthorisationCode' => 'URL_SUCCESS_' . time()
+            );
+            
+            $result = process_successful_payment($order, $mock_params);
+            
+            if ($result) {
+                error_log("✅ Reserva procesada desde URL para order: $order");
+            } else {
+                error_log("❌ Error procesando reserva desde URL para order: $order");
+            }
+        } else {
+            error_log("ℹ️ Reserva ya existe para order: $order (ID: $existing)");
+        }
+    }
 }
 
 // ✅ VERIFICAR Y CREAR CAMPO redsys_order_id SI NO EXISTE
@@ -1833,23 +1926,24 @@ function ajax_get_confirmed_reservation_data() {
     }
 
     $order_id = sanitize_text_field($_POST['order_id'] ?? '');
+    $localizador = sanitize_text_field($_GET['localizador'] ?? ''); // ✅ AÑADIR ESTO
     
     error_log('=== BUSCANDO DATOS DE CONFIRMACIÓN ===');
     error_log('Order ID recibido: ' . $order_id);
+    error_log('Localizador recibido: ' . $localizador);
     
     global $wpdb;
     $table_reservas = $wpdb->prefix . 'reservas_reservas';
-    $table_config = $wpdb->prefix . 'reservas_configuration';
     
-    // ✅ MÉTODO 1: Buscar en BD por redsys_order_id (MÁS DIRECTO)
-    if (!empty($order_id)) {
+    // ✅ MÉTODO 1: Buscar por localizador si lo tenemos
+    if (!empty($localizador)) {
         $reserva = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table_reservas WHERE redsys_order_id = %s ORDER BY created_at DESC LIMIT 1",
-            $order_id
+            "SELECT * FROM $table_reservas WHERE localizador = %s ORDER BY created_at DESC LIMIT 1",
+            $localizador
         ));
         
         if ($reserva) {
-            error_log('✅ Reserva encontrada en BD por redsys_order_id: ' . $reserva->localizador);
+            error_log('✅ Reserva encontrada por localizador: ' . $reserva->localizador);
             $data = array(
                 'localizador' => $reserva->localizador,
                 'reserva_id' => $reserva->id,
@@ -1866,17 +1960,7 @@ function ajax_get_confirmed_reservation_data() {
         }
     }
     
-    // ✅ MÉTODO 2: Desde transients
-    if (!empty($order_id)) {
-        $data = get_transient('confirmed_reservation_' . $order_id);
-        if ($data) {
-            error_log('✅ Datos encontrados en transient por order_id');
-            wp_send_json_success($data);
-            return;
-        }
-    }
-    
-    // ✅ MÉTODO 3: Desde sesión
+    // ✅ MÉTODO 2: Desde sesión
     if (!session_id()) {
         session_start();
     }
@@ -1888,18 +1972,25 @@ function ajax_get_confirmed_reservation_data() {
         return;
     }
     
-    // ✅ MÉTODO 4: Buscar la más reciente del último minuto
+    // ✅ MÉTODO 3: Desde transients
+    $data = get_transient('latest_confirmed_reservation');
+    if ($data) {
+        error_log('✅ Datos encontrados en transient');
+        wp_send_json_success($data);
+        return;
+    }
+    
+    // ✅ MÉTODO 4: Buscar la más reciente
     $recent_reservation = $wpdb->get_row(
         "SELECT * FROM $table_reservas 
-         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 5 MINUTE)
-         AND metodo_pago = 'redsys'
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
          AND estado = 'confirmada'
          ORDER BY created_at DESC 
          LIMIT 1"
     );
     
     if ($recent_reservation) {
-        error_log('✅ Reserva reciente encontrada en BD: ' . $recent_reservation->localizador);
+        error_log('✅ Reserva reciente encontrada: ' . $recent_reservation->localizador);
         
         $data = array(
             'localizador' => $recent_reservation->localizador,
@@ -1916,7 +2007,7 @@ function ajax_get_confirmed_reservation_data() {
         return;
     }
     
-    error_log('❌ No se encontraron datos de confirmación por ningún método');
+    error_log('❌ No se encontraron datos de confirmación');
     wp_send_json_error('No se encontraron datos de confirmación');
 }
 
