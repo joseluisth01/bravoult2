@@ -9160,3 +9160,971 @@ function hidePDFLoadingIndicator() {
 
 // Exponer función globalmente
 window.downloadTicketPDF = downloadTicketPDF;
+
+
+/**
+ * Cargar sección de "Mis Reservas" para agencias
+ */
+function loadAgencyReservations() {
+    console.log('=== CARGANDO MIS RESERVAS PARA AGENCIA ===');
+
+    // Mostrar indicador de carga
+    showLoadingInMainContent();
+
+    // Renderizar la interfaz de "Mis Reservas"
+    renderAgencyReservationsSection();
+}
+
+/**
+ * Renderizar la sección de "Mis Reservas" para agencias
+ */
+function renderAgencyReservationsSection() {
+    const content = `
+        <div class="reports-management">
+            <div class="reports-header">
+                <h1>🎫 Mis Reservas</h1>
+                <div class="reports-actions">
+                    <button class="btn-primary" onclick="showAgencyQuickStatsModal()">📈 Estadísticas Rápidas</button>
+                    <button class="btn-secondary" onclick="goBackToDashboard()">← Volver al Dashboard</button>
+                </div>
+            </div>
+            
+            <!-- Pestañas de navegación -->
+            <div class="reports-tabs">
+                <button class="tab-btn active" onclick="switchAgencyTab('reservations')">🎫 Gestión de Reservas</button>
+                <button class="tab-btn" onclick="switchAgencyTab('search')">🔍 Buscar Billetes</button>
+                <button class="tab-btn" onclick="switchAgencyTab('analytics')">📊 Análisis por Fechas</button>
+            </div>
+            
+            <!-- Contenido de las pestañas -->
+            <div class="tab-content">
+                <!-- Pestaña 1: Gestión de Reservas -->
+                <div id="tab-agency-reservations" class="tab-panel active">
+                    <div class="reservations-section">
+                        <h3>Gestión de Mis Reservas con Filtros Avanzados</h3>
+                        
+                        <!-- Filtros (sin filtro de agencias) -->
+                        <div class="advanced-filters">
+                            <div class="filters-row">
+                                <div class="filter-group">
+                                    <label for="agency-fecha-inicio">Fecha Inicio:</label>
+                                    <input type="date" id="agency-fecha-inicio" value="${new Date().toISOString().split('T')[0]}">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="agency-fecha-fin">Fecha Fin:</label>
+                                    <input type="date" id="agency-fecha-fin" value="${new Date().toISOString().split('T')[0]}">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="agency-tipo-fecha">Tipo de Fecha:</label>
+                                    <select id="agency-tipo-fecha">
+                                        <option value="servicio">Fecha de Servicio</option>
+                                        <option value="compra">Fecha de Compra</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="agency-estado-filtro">Estado de Reservas:</label>
+                                    <select id="agency-estado-filtro">
+                                        <option value="confirmadas">Solo Confirmadas</option>
+                                        <option value="todas">Todas (Confirmadas y Canceladas)</option>
+                                        <option value="canceladas">Solo Canceladas</option>
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <button class="btn-primary" onclick="loadAgencyReservationsByDateWithFilters()">🔍 Aplicar Filtros</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="agency-reservations-stats" class="stats-summary" style="display: none;">
+                            <!-- Estadísticas se cargarán aquí -->
+                        </div>
+                        
+                        <div id="agency-reservations-list" class="reservations-table">
+                            <!-- Lista de reservas se cargará aquí -->
+                        </div>
+                        
+                        <div id="agency-reservations-pagination" class="pagination-controls">
+                            <!-- Paginación se cargará aquí -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pestaña 2: Buscar Billetes -->
+                <div id="tab-agency-search" class="tab-panel">
+                    <div class="search-section">
+                        <h3>Buscar Mis Billetes</h3>
+                        <div class="search-form">
+                            <div class="search-row">
+                                <select id="agency-search-type">
+                                    <option value="localizador">Localizador</option>
+                                    <option value="email">Email</option>
+                                    <option value="telefono">Teléfono</option>
+                                    <option value="nombre">Nombre/Apellidos</option>
+                                    <option value="fecha_emision">Fecha de Emisión</option>
+                                    <option value="fecha_servicio">Fecha de Servicio</option>
+                                </select>
+                                <input type="text" id="agency-search-value" placeholder="Introduce el valor a buscar...">
+                                <button class="btn-primary" onclick="searchAgencyReservations()">🔍 Buscar</button>
+                            </div>
+                        </div>
+                        
+                        <div id="agency-search-results" class="search-results">
+                            <!-- Resultados de búsqueda se cargarán aquí -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pestaña 3: Análisis por Fechas -->
+                <div id="tab-agency-analytics" class="tab-panel">
+                    <div class="analytics-section">
+                        <h3>Análisis Estadístico de Mis Reservas</h3>
+                        <div class="analytics-filters">
+                            <div class="quick-ranges">
+                                <h4>Períodos Rápidos:</h4>
+                                <button class="range-btn" onclick="loadAgencyRangeStats('7_days')">Últimos 7 días</button>
+                                <button class="range-btn" onclick="loadAgencyRangeStats('30_days')">Últimos 30 días</button>
+                                <button class="range-btn" onclick="loadAgencyRangeStats('60_days')">Últimos 60 días</button>
+                                <button class="range-btn" onclick="loadAgencyRangeStats('this_month')">Este mes</button>
+                                <button class="range-btn" onclick="loadAgencyRangeStats('last_month')">Mes pasado</button>
+                                <button class="range-btn" onclick="loadAgencyRangeStats('this_year')">Este año</button>
+                            </div>
+                            
+                            <div class="custom-range">
+                                <h4>Rango Personalizado:</h4>
+                                <input type="date" id="agency-custom-fecha-inicio" placeholder="Fecha inicio">
+                                <input type="date" id="agency-custom-fecha-fin" placeholder="Fecha fin">
+                                <button class="btn-primary" onclick="loadAgencyCustomRangeStats()">Analizar Período</button>
+                            </div>
+                        </div>
+                        
+                        <div id="agency-analytics-results" class="analytics-results">
+                            <!-- Resultados de análisis se cargarán aquí -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modales reutilizados -->
+        <div id="agencyQuickStatsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeAgencyQuickStatsModal()">&times;</span>
+                <h3>📈 Mis Estadísticas Rápidas</h3>
+                <div id="agency-quick-stats-content">
+                    <div class="loading">Cargando estadísticas...</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Insertar contenido en el dashboard principal
+    jQuery('.dashboard-content').html(content);
+
+    console.log('🔧 Configurando eventos de agency reports...');
+    initAgencyReportsEvents();
+
+    console.log('🔄 Iniciando carga de datos de agencia...');
+    loadAgencyReservationsByDateWithFilters();
+}
+
+/**
+ * Inicializar eventos para "Mis Reservas"
+ */
+function initAgencyReportsEvents() {
+    // Evento para cambio automático al seleccionar fechas
+    document.getElementById('agency-fecha-inicio').addEventListener('change', function () {
+        if (this.value && document.getElementById('agency-fecha-fin').value) {
+            loadAgencyReservationsByDateWithFilters();
+        }
+    });
+
+    document.getElementById('agency-fecha-fin').addEventListener('change', function () {
+        if (this.value && document.getElementById('agency-fecha-inicio').value) {
+            loadAgencyReservationsByDateWithFilters();
+        }
+    });
+
+    // Evento para cambio de filtro de estado
+    document.getElementById('agency-estado-filtro').addEventListener('change', function () {
+        if (document.getElementById('agency-fecha-inicio').value && document.getElementById('agency-fecha-fin').value) {
+            loadAgencyReservationsByDateWithFilters();
+        }
+    });
+
+    // Evento para cambio de tipo de búsqueda
+    document.getElementById('agency-search-type').addEventListener('change', function () {
+        const searchValue = document.getElementById('agency-search-value');
+        const searchType = this.value;
+
+        if (searchType === 'fecha_emision' || searchType === 'fecha_servicio') {
+            searchValue.type = 'date';
+            searchValue.placeholder = 'Selecciona una fecha';
+        } else {
+            searchValue.type = 'text';
+            searchValue.placeholder = 'Introduce el valor a buscar...';
+        }
+    });
+
+    // Permitir búsqueda con Enter
+    document.getElementById('agency-search-value').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            searchAgencyReservations();
+        }
+    });
+}
+
+/**
+ * Cargar reservas de agencia con filtros
+ */
+function loadAgencyReservationsByDateWithFilters(page = 1) {
+    const fechaInicio = document.getElementById('agency-fecha-inicio').value;
+    const fechaFin = document.getElementById('agency-fecha-fin').value;
+    const tipoFecha = document.getElementById('agency-tipo-fecha').value;
+    const estadoFiltro = document.getElementById('agency-estado-filtro').value;
+
+    console.log('=== APLICANDO FILTROS AGENCIA ===');
+    console.log('Fecha inicio:', fechaInicio);
+    console.log('Fecha fin:', fechaFin);
+    console.log('Tipo fecha:', tipoFecha);
+    console.log('Estado filtro:', estadoFiltro);
+
+    if (!fechaInicio || !fechaFin) {
+        alert('Por favor, selecciona ambas fechas');
+        return;
+    }
+
+    document.getElementById('agency-reservations-list').innerHTML = '<div class="loading">Cargando mis reservas...</div>';
+
+    const formData = new FormData();
+    formData.append('action', 'get_agency_reservations_report');
+    formData.append('fecha_inicio', fechaInicio);
+    formData.append('fecha_fin', fechaFin);
+    formData.append('tipo_fecha', tipoFecha);
+    formData.append('estado_filtro', estadoFiltro);
+    formData.append('page', page);
+    formData.append('nonce', reservasAjax.nonce);
+
+    console.log('Enviando solicitud con filtros...');
+
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Respuesta del servidor:', data);
+
+            if (data.success) {
+                console.log('✅ Datos cargados correctamente');
+                console.log('Total reservas encontradas:', data.data.stats.total_reservas);
+                renderAgencyReservationsReportWithFilters(data.data);
+            } else {
+                console.error('❌ Error del servidor:', data.data);
+                document.getElementById('agency-reservations-list').innerHTML =
+                    '<div class="error">Error: ' + data.data + '</div>';
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error de conexión:', error);
+            document.getElementById('agency-reservations-list').innerHTML =
+                '<div class="error">Error de conexión</div>';
+        });
+}
+
+/**
+ * Renderizar reporte de reservas de agencia
+ */
+function renderAgencyReservationsReportWithFilters(data) {
+    // Mostrar estadísticas principales
+    const statsHtml = `
+        <div class="stats-cards">
+            <div class="stat-card">
+                <h4>Mis Reservas</h4>
+                <div class="stat-number">${data.stats.total_reservas || 0}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Adultos</h4>
+                <div class="stat-number">${data.stats.total_adultos || 0}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Residentes</h4>
+                <div class="stat-number">${data.stats.total_residentes || 0}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Niños (5-12)</h4>
+                <div class="stat-number">${data.stats.total_ninos_5_12 || 0}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Niños (-5)</h4>
+                <div class="stat-number">${data.stats.total_ninos_menores || 0}</div>
+            </div>
+            <div class="stat-card">
+                <h4>Mis Ingresos</h4>
+                <div class="stat-number">${parseFloat(data.stats.ingresos_totales || 0).toFixed(2)}€</div>
+            </div>
+        </div>
+    `;
+
+    let statsCompleteHtml = statsHtml;
+
+    // Estadísticas por estado
+    if (data.stats_por_estado && data.stats_por_estado.length > 0) {
+        let statusStatsHtml = '<div class="stats-by-status"><h4 style="grid-column: 1/-1; margin: 0;">📊 Desglose por Estado</h4>';
+
+        data.stats_por_estado.forEach(stat => {
+            const statusText = stat.estado === 'confirmada' ? 'Confirmadas' :
+                stat.estado === 'cancelada' ? 'Canceladas' :
+                    stat.estado === 'pendiente' ? 'Pendientes' : stat.estado;
+
+            statusStatsHtml += `
+                <div class="status-stat-card status-${stat.estado}">
+                    <h5>${statusText}</h5>
+                    <div class="stat-number">${stat.total}</div>
+                    <div class="stat-amount">${parseFloat(stat.ingresos || 0).toFixed(2)}€</div>
+                </div>
+            `;
+        });
+
+        statusStatsHtml += '</div>';
+        statsCompleteHtml += statusStatsHtml;
+    }
+
+    document.getElementById('agency-reservations-stats').innerHTML = statsCompleteHtml;
+    document.getElementById('agency-reservations-stats').style.display = 'block';
+
+    // Determinar texto del filtro aplicado
+    const tipoFechaText = data.filtros.tipo_fecha === 'compra' ? 'Fecha de Compra' : 'Fecha de Servicio';
+
+    let estadoText = '';
+    switch (data.filtros.estado_filtro) {
+        case 'confirmadas':
+            estadoText = ' (solo confirmadas)';
+            break;
+        case 'canceladas':
+            estadoText = ' (solo canceladas)';
+            break;
+        case 'todas':
+            estadoText = ' (todas las reservas)';
+            break;
+    }
+
+    // Mostrar tabla de reservas
+    let tableHtml = `
+        <div class="table-header">
+            <h4>Mis Reservas por ${tipoFechaText}: ${data.filtros.fecha_inicio} al ${data.filtros.fecha_fin}${estadoText}</h4>
+        </div>
+        <table class="reservations-table-data">
+            <thead>
+                <tr>
+                    <th>Localizador</th>
+                    <th>Fecha Servicio</th>
+                    <th>Fecha Compra</th>
+                    <th>Hora</th>
+                    <th>Cliente</th>
+                    <th>Email</th>
+                    <th>Teléfono</th>
+                    <th>Personas</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    if (data.reservas && data.reservas.length > 0) {
+        data.reservas.forEach(reserva => {
+            const fechaServicioFormateada = new Date(reserva.fecha).toLocaleDateString('es-ES');
+            const fechaCompraFormateada = new Date(reserva.created_at).toLocaleDateString('es-ES', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const personasDetalle = `A:${reserva.adultos} R:${reserva.residentes} N:${reserva.ninos_5_12} B:${reserva.ninos_menores}`;
+
+            // Clase CSS para el estado
+            let estadoClass = 'status-confirmada';
+            let rowClass = '';
+            if (reserva.estado === 'cancelada') {
+                estadoClass = 'status-cancelada';
+                rowClass = 'reservation-cancelled';
+            }
+            if (reserva.estado === 'pendiente') {
+                estadoClass = 'status-pendiente';
+            }
+
+            tableHtml += `
+               <tr class="${rowClass}">
+                   <td><strong>${reserva.localizador}</strong></td>
+                   <td>${fechaServicioFormateada}</td>
+                   <td><small>${fechaCompraFormateada}</small></td>
+                   <td>${reserva.hora}</td>
+                   <td>${reserva.nombre} ${reserva.apellidos}</td>
+                   <td>${reserva.email}</td>
+                   <td>${reserva.telefono}</td>
+                   <td title="Adultos: ${reserva.adultos}, Residentes: ${reserva.residentes}, Niños 5-12: ${reserva.ninos_5_12}, Menores: ${reserva.ninos_menores}">${personasDetalle}</td>
+                   <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
+                   <td><span class="status-badge ${estadoClass}">${reserva.estado.toUpperCase()}</span></td>
+                   <td>
+                        <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
+                        <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
+                        <button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
+                    </td>
+               </tr>
+           `;
+        });
+    } else {
+        tableHtml += `
+           <tr>
+               <td colspan="11" style="text-align: center; padding: 40px; color: #666;">
+                   No se encontraron reservas con los filtros aplicados
+               </td>
+           </tr>
+       `;
+    }
+
+    tableHtml += `</tbody></table>`;
+
+    document.getElementById('agency-reservations-list').innerHTML = tableHtml;
+
+    // Mostrar paginación
+    if (data.pagination && data.pagination.total_pages > 1) {
+        renderAgencyPaginationWithFilters(data.pagination);
+    } else {
+        document.getElementById('agency-reservations-pagination').innerHTML = '';
+    }
+}
+
+/**
+ * Renderizar paginación de agencia
+ */
+function renderAgencyPaginationWithFilters(pagination) {
+    let paginationHtml = '<div class="pagination">';
+
+    // Botón anterior
+    if (pagination.current_page > 1) {
+        paginationHtml += `<button class="btn-pagination" onclick="loadAgencyReservationsByDateWithFilters(${pagination.current_page - 1})">« Anterior</button>`;
+    }
+
+    // Números de página
+    for (let i = 1; i <= pagination.total_pages; i++) {
+        if (i === pagination.current_page) {
+            paginationHtml += `<button class="btn-pagination active">${i}</button>`;
+       } else {
+           paginationHtml += `<button class="btn-pagination" onclick="loadAgencyReservationsByDateWithFilters(${i})">${i}</button>`;
+       }
+   }
+
+   // Botón siguiente
+   if (pagination.current_page < pagination.total_pages) {
+       paginationHtml += `<button class="btn-pagination" onclick="loadAgencyReservationsByDateWithFilters(${pagination.current_page + 1})">Siguiente »</button>`;
+   }
+
+   paginationHtml += `</div>
+       <div class="pagination-info">
+           Página ${pagination.current_page} de ${pagination.total_pages} 
+           (${pagination.total_items} reservas total)
+       </div>`;
+
+   document.getElementById('agency-reservations-pagination').innerHTML = paginationHtml;
+}
+
+/**
+* Cambiar pestañas de agencia
+*/
+function switchAgencyTab(tabName) {
+   // Ocultar todas las pestañas
+   document.querySelectorAll('#tab-agency-reservations, #tab-agency-search, #tab-agency-analytics').forEach(panel => {
+       panel.classList.remove('active');
+   });
+
+   // Quitar clase active de todos los botones
+   document.querySelectorAll('.tab-btn').forEach(btn => {
+       btn.classList.remove('active');
+   });
+
+   // Mostrar pestaña seleccionada
+   document.getElementById('tab-agency-' + tabName).classList.add('active');
+
+   // Activar botón correspondiente
+   event.target.classList.add('active');
+}
+
+/**
+* Buscar reservas de agencia
+*/
+function searchAgencyReservations() {
+   const searchType = document.getElementById('agency-search-type').value;
+   const searchValue = document.getElementById('agency-search-value').value.trim();
+
+   if (!searchValue) {
+       alert('Por favor, introduce un valor para buscar');
+       return;
+   }
+
+   document.getElementById('agency-search-results').innerHTML = '<div class="loading">Buscando mis reservas...</div>';
+
+   const formData = new FormData();
+   formData.append('action', 'search_agency_reservations');
+   formData.append('search_type', searchType);
+   formData.append('search_value', searchValue);
+   formData.append('nonce', reservasAjax.nonce);
+
+   fetch(reservasAjax.ajax_url, {
+       method: 'POST',
+       body: formData
+   })
+       .then(response => response.json())
+       .then(data => {
+           if (data.success) {
+               renderAgencySearchResults(data.data);
+           } else {
+               document.getElementById('agency-search-results').innerHTML =
+                   '<div class="error">Error: ' + data.data + '</div>';
+           }
+       })
+       .catch(error => {
+           console.error('Error:', error);
+           document.getElementById('agency-search-results').innerHTML =
+               '<div class="error">Error de conexión</div>';
+       });
+}
+
+/**
+* Renderizar resultados de búsqueda de agencia
+*/
+function renderAgencySearchResults(data) {
+   let resultsHtml = `
+       <div class="search-header">
+           <h4>Resultados de búsqueda: ${data.total_found} reservas encontradas</h4>
+           <p>Búsqueda por <strong>${data.search_type}</strong>: "${data.search_value}"</p>
+       </div>
+   `;
+
+   if (data.reservas && data.reservas.length > 0) {
+       resultsHtml += `
+           <table class="search-results-table">
+               <thead>
+                   <tr>
+                       <th>Localizador</th>
+                       <th>Fecha Servicio</th>
+                       <th>Cliente</th>
+                       <th>Email</th>
+                       <th>Teléfono</th>
+                       <th>Personas</th>
+                       <th>Total</th>
+                       <th>Acciones</th>
+                   </tr>
+               </thead>
+               <tbody>
+       `;
+
+       data.reservas.forEach(reserva => {
+           const fechaFormateada = new Date(reserva.fecha).toLocaleDateString('es-ES');
+           const personasDetalle = `A:${reserva.adultos} R:${reserva.residentes} N:${reserva.ninos_5_12} B:${reserva.ninos_menores}`;
+
+           resultsHtml += `
+               <tr>
+                   <td><strong>${reserva.localizador}</strong></td>
+                   <td>${fechaFormateada}</td>
+                   <td>${reserva.nombre} ${reserva.apellidos}</td>
+                   <td>${reserva.email}</td>
+                   <td>${reserva.telefono}</td>
+                   <td title="Adultos: ${reserva.adultos}, Residentes: ${reserva.residentes}, Niños 5-12: ${reserva.ninos_5_12}, Menores: ${reserva.ninos_menores}">${personasDetalle}</td>
+                   <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
+                   <td>
+                       <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
+                       <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
+                       <button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
+                   </td>
+               </tr>
+           `;
+       });
+
+       resultsHtml += `
+               </tbody>
+           </table>
+       `;
+   } else {
+       resultsHtml += `
+           <div class="no-results">
+               <p>No se encontraron reservas con los criterios especificados.</p>
+           </div>
+       `;
+   }
+
+   document.getElementById('agency-search-results').innerHTML = resultsHtml;
+}
+
+/**
+* Cargar estadísticas por rango para agencia
+*/
+function loadAgencyRangeStats(rangeType) {
+   document.getElementById('agency-analytics-results').innerHTML = '<div class="loading">Cargando análisis...</div>';
+
+   const formData = new FormData();
+   formData.append('action', 'get_agency_date_range_stats');
+   formData.append('range_type', rangeType);
+   formData.append('nonce', reservasAjax.nonce);
+
+   fetch(reservasAjax.ajax_url, {
+       method: 'POST',
+       body: formData
+   })
+       .then(response => response.json())
+       .then(data => {
+           if (data.success) {
+               renderAgencyAnalyticsResults(data.data);
+           } else {
+               document.getElementById('agency-analytics-results').innerHTML =
+                   '<div class="error">Error: ' + data.data + '</div>';
+           }
+       })
+       .catch(error => {
+           console.error('Error:', error);
+           document.getElementById('agency-analytics-results').innerHTML =
+               '<div class="error">Error de conexión</div>';
+       });
+}
+
+/**
+* Cargar estadísticas personalizadas para agencia
+*/
+function loadAgencyCustomRangeStats() {
+   const fechaInicio = document.getElementById('agency-custom-fecha-inicio').value;
+   const fechaFin = document.getElementById('agency-custom-fecha-fin').value;
+
+   if (!fechaInicio || !fechaFin) {
+       alert('Por favor, selecciona ambas fechas');
+       return;
+   }
+
+   document.getElementById('agency-analytics-results').innerHTML = '<div class="loading">Cargando análisis...</div>';
+
+   const formData = new FormData();
+   formData.append('action', 'get_agency_date_range_stats');
+   formData.append('range_type', 'custom');
+   formData.append('fecha_inicio', fechaInicio);
+   formData.append('fecha_fin', fechaFin);
+   formData.append('nonce', reservasAjax.nonce);
+
+   fetch(reservasAjax.ajax_url, {
+       method: 'POST',
+       body: formData
+   })
+       .then(response => response.json())
+       .then(data => {
+           if (data.success) {
+               renderAgencyAnalyticsResults(data.data);
+           } else {
+               document.getElementById('agency-analytics-results').innerHTML =
+                   '<div class="error">Error: ' + data.data + '</div>';
+           }
+       })
+       .catch(error => {
+           console.error('Error:', error);
+           document.getElementById('agency-analytics-results').innerHTML =
+               '<div class="error">Error de conexión</div>';
+       });
+}
+
+/**
+* Renderizar resultados de análisis para agencia
+*/
+function renderAgencyAnalyticsResults(data) {
+   const stats = data.stats;
+   const promedioPersonasPorReserva = stats.total_reservas > 0 ?
+       (parseFloat(stats.total_personas_con_plaza) / parseFloat(stats.total_reservas)).toFixed(1) : 0;
+
+   let analyticsHtml = `
+       <div class="analytics-summary">
+           <h4>📊 Mis Estadísticas del Período: ${data.fecha_inicio} al ${data.fecha_fin}</h4>
+           
+           <div class="analytics-stats-grid">
+               <div class="analytics-stat-card">
+                   <h5>Mis Reservas</h5>
+                   <div class="analytics-stat-number">${stats.total_reservas || 0}</div>
+               </div>
+               <div class="analytics-stat-card">
+                   <h5>Mis Ingresos</h5>
+                   <div class="analytics-stat-number">${parseFloat(stats.ingresos_totales || 0).toFixed(2)}€</div>
+               </div>
+               <div class="analytics-stat-card">
+                   <h5>Descuentos Aplicados</h5>
+                   <div class="analytics-stat-number">${parseFloat(stats.descuentos_totales || 0).toFixed(2)}€</div>
+               </div>
+               <div class="analytics-stat-card">
+                   <h5>Precio Promedio</h5>
+                   <div class="analytics-stat-number">${parseFloat(stats.precio_promedio || 0).toFixed(2)}€</div>
+               </div>
+           </div>
+           
+           <div class="people-breakdown">
+               <h5>👥 Distribución de Personas</h5>
+               <div class="people-stats">
+                   <div class="people-stat">
+                       <span class="people-label">Adultos:</span>
+                       <span class="people-number">${stats.total_adultos || 0}</span>
+                   </div>
+                   <div class="people-stat">
+                       <span class="people-label">Residentes:</span>
+                       <span class="people-number">${stats.total_residentes || 0}</span>
+                   </div>
+                   <div class="people-stat">
+                       <span class="people-label">Niños (5-12):</span>
+                       <span class="people-number">${stats.total_ninos_5_12 || 0}</span>
+                   </div>
+                   <div class="people-stat">
+                       <span class="people-label">Niños menores:</span>
+                       <span class="people-number">${stats.total_ninos_menores || 0}</span>
+                   </div>
+                   <div class="people-stat total">
+                       <span class="people-label">Total con plaza:</span>
+                       <span class="people-number">${stats.total_personas_con_plaza || 0}</span>
+                   </div>
+               </div>
+               <p><strong>Promedio personas por reserva:</strong> ${promedioPersonasPorReserva}</p>
+           </div>
+       </div>
+   `;
+
+   // Agregar gráfico simple de reservas por día si hay datos
+   if (data.reservas_por_dia && data.reservas_por_dia.length > 0) {
+       analyticsHtml += `
+           <div class="daily-chart">
+               <h5>📈 Mis Reservas por Día</h5>
+               <div class="chart-container">
+       `;
+
+       data.reservas_por_dia.forEach(dia => {
+           const fecha = new Date(dia.fecha).toLocaleDateString('es-ES', {
+               day: '2-digit',
+               month: '2-digit'
+           });
+           analyticsHtml += `
+               <div class="chart-bar">
+                   <div class="bar-value">${dia.reservas_dia}</div>
+                   <div class="bar" style="height: ${Math.max(dia.reservas_dia * 20, 10)}px;"></div>
+                   <div class="bar-label">${fecha}</div>
+               </div>
+           `;
+       });
+
+       analyticsHtml += `
+               </div>
+           </div>
+       `;
+   }
+
+   document.getElementById('agency-analytics-results').innerHTML = analyticsHtml;
+}
+
+/**
+* Mostrar modal de estadísticas rápidas para agencia
+*/
+function showAgencyQuickStatsModal() {
+   document.getElementById('agency-quick-stats-content').innerHTML = '<div class="loading">📊 Cargando mis estadísticas...</div>';
+   document.getElementById('agencyQuickStatsModal').style.display = 'block';
+
+   // Cargar estadísticas
+   loadAgencyQuickStats();
+}
+
+/**
+* Cargar estadísticas rápidas para agencia
+*/
+function loadAgencyQuickStats() {
+   const formData = new FormData();
+   formData.append('action', 'get_agency_quick_stats');
+   formData.append('nonce', reservasAjax.nonce);
+
+   fetch(reservasAjax.ajax_url, {
+       method: 'POST',
+       body: formData
+   })
+       .then(response => response.json())
+       .then(data => {
+           if (data.success) {
+               renderAgencyQuickStats(data.data);
+           } else {
+               document.getElementById('agency-quick-stats-content').innerHTML =
+                   '<div class="error">❌ Error cargando estadísticas: ' + data.data + '</div>';
+           }
+       })
+       .catch(error => {
+           console.error('Error:', error);
+           document.getElementById('agency-quick-stats-content').innerHTML =
+               '<div class="error">❌ Error de conexión</div>';
+       });
+}
+
+/**
+* Renderizar estadísticas rápidas para agencia
+*/
+function renderAgencyQuickStats(stats) {
+   const hoy = new Date().toLocaleDateString('es-ES', {
+       weekday: 'long',
+       year: 'numeric',
+       month: 'long',
+       day: 'numeric'
+   });
+
+   // Determinar color y emoji para el crecimiento
+   let crecimientoColor = '#28a745';
+   let crecimientoEmoji = '📈';
+   let crecimientoTexto = 'Crecimiento';
+
+   if (stats.ingresos.crecimiento < 0) {
+       crecimientoColor = '#dc3545';
+       crecimientoEmoji = '📉';
+       crecimientoTexto = 'Decrecimiento';
+   } else if (stats.ingresos.crecimiento === 0) {
+       crecimientoColor = '#ffc107';
+       crecimientoEmoji = '➡️';
+       crecimientoTexto = 'Sin cambios';
+   }
+
+   let html = `
+       <div class="quick-stats-container">
+           <!-- Resumen Ejecutivo -->
+           <div class="stats-summary-header">
+               <h4>📊 Mis Estadísticas - ${hoy}</h4>
+           </div>
+           
+           <!-- Métricas Principales -->
+           <div class="main-metrics">
+               <div class="metric-card today">
+                   <div class="metric-icon">🎫</div>
+                   <div class="metric-content">
+                       <div class="metric-number">${stats.hoy.reservas}</div>
+                       <div class="metric-label">Mis Reservas Hoy</div>
+                   </div>
+               </div>
+               
+               <div class="metric-card revenue">
+                   <div class="metric-icon">💰</div>
+                   <div class="metric-content">
+                       <div class="metric-number">${parseFloat(stats.ingresos.mes_actual).toFixed(2)}€</div>
+                       <div class="metric-label">Mis Ingresos Este Mes</div>
+                   </div>
+               </div>
+               
+               <div class="metric-card growth" style="border-left-color: ${crecimientoColor}">
+                   <div class="metric-icon">${crecimientoEmoji}</div>
+                   <div class="metric-content">
+                       <div class="metric-number" style="color: ${crecimientoColor}">
+                           ${stats.ingresos.crecimiento > 0 ? '+' : ''}${stats.ingresos.crecimiento.toFixed(1)}%
+                       </div>
+                       <div class="metric-label">${crecimientoTexto} vs Mes Pasado</div>
+                   </div>
+               </div>
+               
+               <div class="metric-card occupancy">
+                   <div class="metric-icon">👥</div>
+                   <div class="metric-content">
+                       <div class="metric-number">${stats.tipos_cliente.total_personas || 0}</div>
+                       <div class="metric-label">Personas Este Mes</div>
+                   </div>
+               </div>
+           </div>
+           
+           <!-- Información Detallada -->
+           <div class="detailed-stats">
+               <!-- Top Días -->
+               <div class="stat-section">
+                   <h5>🏆 Mis Mejores Días Este Mes</h5>
+                   <div class="top-days">
+   `;
+
+   if (stats.top_dias && stats.top_dias.length > 0) {
+       stats.top_dias.forEach((dia, index) => {
+           const fecha = new Date(dia.fecha).toLocaleDateString('es-ES', {
+               weekday: 'short',
+               day: '2-digit',
+               month: '2-digit'
+           });
+           const medalla = ['🥇', '🥈', '🥉'][index] || '🏅';
+
+           html += `
+               <div class="top-day-item">
+                   <span class="medal">${medalla}</span>
+                   <span class="date">${fecha}</span>
+                   <span class="count">${dia.total_reservas} reservas</span>
+                   <span class="people">${dia.total_personas} personas</span>
+               </div>
+           `;
+       });
+   } else {
+       html += '<p class="no-data">📊 No hay datos suficientes este mes</p>';
+   }
+
+   html += `
+                   </div>
+               </div>
+               
+               <!-- Distribución de Clientes -->
+               <div class="stat-section">
+                   <h5>👥 Mis Clientes Este Mes</h5>
+                   <div class="client-distribution">
+   `;
+
+   if (stats.tipos_cliente) {
+       const total = parseInt(stats.tipos_cliente.total_adultos || 0) +
+           parseInt(stats.tipos_cliente.total_residentes || 0) +
+           parseInt(stats.tipos_cliente.total_ninos || 0) +
+           parseInt(stats.tipos_cliente.total_bebes || 0);
+
+       if (total > 0) {
+           html += `
+               <div class="client-type">
+                   <span class="type-icon">👨‍💼</span>
+                   <span class="type-label">Adultos:</span>
+                   <span class="type-count">${stats.tipos_cliente.total_adultos || 0}</span>
+               </div>
+               <div class="client-type">
+                   <span class="type-icon">🏠</span>
+                   <span class="type-label">Residentes:</span>
+                   <span class="type-count">${stats.tipos_cliente.total_residentes || 0}</span>
+               </div>
+               <div class="client-type">
+                   <span class="type-icon">👶</span>
+                   <span class="type-label">Niños (5-12):</span>
+                   <span class="type-count">${stats.tipos_cliente.total_ninos || 0}</span>
+               </div>
+               <div class="client-type">
+                   <span class="type-icon">🍼</span>
+                   <span class="type-label">Bebés (gratis):</span>
+                   <span class="type-count">${stats.tipos_cliente.total_bebes || 0}</span>
+               </div>
+           `;
+       } else {
+           html += '<p class="no-data">📊 No hay reservas este mes</p>';
+       }
+   }
+
+   html += `
+                   </div>
+               </div>
+           </div>
+           
+           <!-- Botón de Actualizar -->
+           <div class="stats-actions">
+               <button class="btn-primary" onclick="loadAgencyQuickStats()">🔄 Actualizar Estadísticas</button>
+           </div>
+       </div>
+   `;
+
+   document.getElementById('agency-quick-stats-content').innerHTML = html;
+}
+
+/**
+* Cerrar modal de estadísticas rápidas para agencia
+*/
+function closeAgencyQuickStatsModal() {
+   document.getElementById('agencyQuickStatsModal').style.display = 'none';
+}
+
+// Exponer función globalmente
+window.loadAgencyReservations = loadAgencyReservations;
