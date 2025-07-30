@@ -62,7 +62,14 @@ add_action('wp_ajax_nopriv_get_agency_date_range_stats', array($this, 'get_agenc
 add_action('wp_ajax_get_agency_quick_stats', array($this, 'get_agency_quick_stats'));
 add_action('wp_ajax_nopriv_get_agency_quick_stats', array($this, 'get_agency_quick_stats'));
 
+add_action('wp_ajax_get_agency_reservation_details', array($this, 'get_agency_reservation_details'));
+add_action('wp_ajax_nopriv_get_agency_reservation_details', array($this, 'get_agency_reservation_details'));
 
+add_action('wp_ajax_generate_agency_ticket_pdf', array($this, 'generate_agency_ticket_pdf'));
+add_action('wp_ajax_nopriv_generate_agency_ticket_pdf', array($this, 'generate_agency_ticket_pdf'));
+
+add_action('wp_ajax_request_agency_cancellation', array($this, 'request_agency_cancellation'));
+add_action('wp_ajax_nopriv_request_agency_cancellation', array($this, 'request_agency_cancellation'));
     }
 
 /**
@@ -1777,6 +1784,198 @@ public function get_agency_quick_stats()
    );
 
    wp_send_json_success($stats);
+}
+
+/**
+ * Obtener detalles de una reserva específica para agencias
+ */
+public function get_agency_reservation_details()
+{
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+
+    if (!session_id()) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['reservas_user'])) {
+        wp_send_json_error('Sesión expirada');
+        return;
+    }
+
+    $user = $_SESSION['reservas_user'];
+    if ($user['role'] !== 'agencia') {
+        wp_send_json_error('Sin permisos');
+        return;
+    }
+
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+
+    $reserva_id = intval($_POST['reserva_id']);
+    $agency_id = $user['id'];
+
+    $reserva = $wpdb->get_row($wpdb->prepare(
+        "SELECT r.*, s.hora as servicio_hora, s.precio_adulto, s.precio_nino, s.precio_residente
+         FROM $table_reservas r
+         LEFT JOIN {$wpdb->prefix}reservas_servicios s ON r.servicio_id = s.id
+         WHERE r.id = %d AND r.agency_id = %d",
+        $reserva_id,
+        $agency_id
+    ));
+
+    if (!$reserva) {
+        wp_send_json_error('Reserva no encontrada o sin permisos');
+    }
+
+    // Decodificar regla de descuento si existe
+    if ($reserva->regla_descuento_aplicada) {
+        $reserva->regla_descuento_aplicada = json_decode($reserva->regla_descuento_aplicada, true);
+    }
+
+    wp_send_json_success($reserva);
+}
+
+/**
+ * Generar PDF de ticket para agencias
+ */
+public function generate_agency_ticket_pdf()
+{
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+
+    if (!session_id()) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'agencia') {
+        wp_send_json_error('Sin permisos');
+        return;
+    }
+
+    $reserva_id = intval($_POST['reserva_id']);
+    $agency_id = $_SESSION['reservas_user']['id'];
+
+    try {
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+
+        // Verificar que la reserva pertenece a la agencia
+        $reserva = $wpdb->get_row($wpdb->prepare(
+            "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente 
+             FROM $table_reservas r
+             LEFT JOIN $table_servicios s ON r.servicio_id = s.id
+             WHERE r.id = %d AND r.agency_id = %d",
+            $reserva_id,
+            $agency_id
+        ));
+
+        if (!$reserva) {
+            wp_send_json_error('Reserva no encontrada o sin permisos');
+            return;
+        }
+
+        // Preparar datos para el PDF
+        $reserva_array = (array) $reserva;
+
+        // Generar PDF
+        if (!class_exists('ReservasPDFGenerator')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
+        }
+
+        $pdf_generator = new ReservasPDFGenerator();
+        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_array);
+
+        if (!$pdf_path || !file_exists($pdf_path)) {
+            wp_send_json_error('Error generando el PDF');
+            return;
+        }
+
+        // Crear URL público para el PDF
+        $upload_dir = wp_upload_dir();
+        $pdf_url = str_replace($upload_dir['path'], $upload_dir['url'], $pdf_path);
+
+        // Programar eliminación del archivo después de 1 hora
+        wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
+
+        wp_send_json_success(array(
+            'pdf_url' => $pdf_url,
+            'localizador' => $reserva->localizador,
+            'filename' => 'billete_' . $reserva->localizador . '.pdf'
+        ));
+
+    } catch (Exception $e) {
+        error_log('Error generando PDF para agencia: ' . $e->getMessage());
+        wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Solicitar cancelación de reserva por parte de agencia
+ */
+public function request_agency_cancellation()
+{
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+
+    if (!session_id()) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['reservas_user']) || $_SESSION['reservas_user']['role'] !== 'agencia') {
+        wp_send_json_error('Sin permisos');
+        return;
+    }
+
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+
+    $reserva_id = intval($_POST['reserva_id']);
+    $motivo_cancelacion = sanitize_text_field($_POST['motivo_cancelacion']);
+    $agency_id = $_SESSION['reservas_user']['id'];
+    $agency_name = $_SESSION['reservas_user']['agency_name'];
+
+    // Verificar que la reserva pertenece a la agencia y no está cancelada
+    $reserva = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table_reservas WHERE id = %d AND agency_id = %d AND estado != 'cancelada'",
+        $reserva_id,
+        $agency_id
+    ));
+
+    if (!$reserva) {
+        wp_send_json_error('Reserva no encontrada, sin permisos o ya cancelada');
+        return;
+    }
+
+    try {
+        // Enviar email al administrador
+        if (!class_exists('ReservasEmailService')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-email-service.php';
+        }
+
+        $result = ReservasEmailService::send_cancellation_request_to_admin([
+            'reserva' => (array) $reserva,
+            'agency_name' => $agency_name,
+            'motivo_cancelacion' => $motivo_cancelacion
+        ]);
+
+        if ($result['success']) {
+            wp_send_json_success('Solicitud de cancelación enviada correctamente al administrador. Te contactarán pronto.');
+        } else {
+            wp_send_json_error('Error enviando la solicitud: ' . $result['message']);
+        }
+
+    } catch (Exception $e) {
+        error_log('Error en solicitud de cancelación: ' . $e->getMessage());
+        wp_send_json_error('Error interno procesando la solicitud');
+    }
 }
     
 }

@@ -9315,6 +9315,16 @@ function renderAgencyReservationsSection() {
                 </div>
             </div>
         </div>
+        
+        <div id="agencyReservationDetailsModal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <span class="close" onclick="closeAgencyReservationDetailsModal()">&times;</span>
+                <h3 id="agencyReservationModalTitle">Detalles de Reserva</h3>
+                <div id="agency-reservation-details-content">
+                    <!-- Contenido se cargará aquí -->
+                </div>
+            </div>
+        </div>
     `;
 
     // Insertar contenido en el dashboard principal
@@ -9568,10 +9578,13 @@ function renderAgencyReservationsReportWithFilters(data) {
                    <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
                    <td><span class="status-badge ${estadoClass}">${reserva.estado.toUpperCase()}</span></td>
                    <td>
-                        <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
-                        <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
-                        <button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
-                    </td>
+    <button class="btn-small btn-info" onclick="showAgencyReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
+    <button class="btn-small btn-success" onclick="downloadAgencyTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
+    ${reserva.estado !== 'cancelada' ?
+        `<button class="btn-small btn-warning" onclick="showAgencyCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Solicitar cancelación">❌</button>` :
+        `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
+    }
+</td>
                </tr>
            `;
         });
@@ -9735,10 +9748,13 @@ function renderAgencySearchResults(data) {
                    <td title="Adultos: ${reserva.adultos}, Residentes: ${reserva.residentes}, Niños 5-12: ${reserva.ninos_5_12}, Menores: ${reserva.ninos_menores}">${personasDetalle}</td>
                    <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
                    <td>
-                       <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
-                       <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
-                       <button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
-                   </td>
+    <button class="btn-small btn-info" onclick="showAgencyReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
+    <button class="btn-small btn-success" onclick="downloadAgencyTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
+    ${reserva.estado !== 'cancelada' ?
+        `<button class="btn-small btn-warning" onclick="showAgencyCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Solicitar cancelación">❌</button>` :
+        `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
+    }
+</td>
                </tr>
            `;
        });
@@ -10128,3 +10144,306 @@ function closeAgencyQuickStatsModal() {
 
 // Exponer función globalmente
 window.loadAgencyReservations = loadAgencyReservations;
+
+/**
+ * Funciones específicas para agencias - Detalles de reserva
+ */
+function showAgencyReservationDetails(reservaId) {
+    console.log('Mostrando detalles de reserva de agencia:', reservaId);
+    
+    const formData = new FormData();
+    formData.append('action', 'get_agency_reservation_details');
+    formData.append('reserva_id', reservaId);
+    formData.append('nonce', reservasAjax.nonce);
+
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderAgencyReservationDetails(data.data);
+                document.getElementById('agencyReservationDetailsModal').style.display = 'block';
+            } else {
+                alert('Error cargando detalles: ' + data.data);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error de conexión');
+        });
+}
+
+/**
+ * Renderizar detalles de reserva para agencia
+ */
+function renderAgencyReservationDetails(reserva) {
+    const fechaServicio = new Date(reserva.fecha).toLocaleDateString('es-ES');
+    const fechaCreacion = new Date(reserva.created_at).toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    let fechaActualizacion = '';
+    if (reserva.updated_at && reserva.updated_at !== reserva.created_at) {
+        const fechaUpdate = new Date(reserva.updated_at).toLocaleDateString('es-ES', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        fechaActualizacion = `
+            <p><strong>Última actualización:</strong> ${fechaUpdate}</p>
+        `;
+    }
+
+    let descuentoInfo = '';
+    if (reserva.regla_descuento_aplicada) {
+        descuentoInfo = `
+            <div class="detail-section">
+                <h4>💰 Información de Descuento</h4>
+                <p><strong>Regla aplicada:</strong> ${reserva.regla_descuento_aplicada.rule_name}</p>
+                <p><strong>Porcentaje:</strong> ${reserva.regla_descuento_aplicada.discount_percentage}%</p>
+                <p><strong>Mínimo personas:</strong> ${reserva.regla_descuento_aplicada.minimum_persons}</p>
+            </div>
+        `;
+    }
+
+    const detailsHtml = `
+        <div class="reservation-details">
+            <div class="details-grid">
+                <div class="detail-section">
+                    <h4>📋 Información General</h4>
+                    <p><strong>Localizador:</strong> ${reserva.localizador}</p>
+                    <p><strong>Estado:</strong> <span class="status-badge status-${reserva.estado}">${reserva.estado.toUpperCase()}</span></p>
+                    <p><strong>Fecha de servicio:</strong> ${fechaServicio}</p>
+                    <p><strong>Hora:</strong> ${reserva.hora}</p>
+                    <p><strong>Fecha de compra:</strong> ${fechaCreacion}</p>
+                    ${fechaActualizacion}
+                </div>
+                
+                <div class="detail-section">
+                    <h4>👤 Datos del Cliente</h4>
+                    <p><strong>Nombre:</strong> ${reserva.nombre} ${reserva.apellidos}</p>
+                    <p><strong>Email:</strong> ${reserva.email || 'No proporcionado'}</p>
+                    <p><strong>Teléfono:</strong> ${reserva.telefono}</p>
+                </div>
+                
+                <div class="detail-section">
+                    <h4>👥 Distribución de Personas</h4>
+                    <p><strong>Adultos:</strong> ${reserva.adultos}</p>
+                    <p><strong>Residentes:</strong> ${reserva.residentes}</p>
+                    <p><strong>Niños (5-12 años):</strong> ${reserva.ninos_5_12}</p>
+                    <p><strong>Niños menores (gratis):</strong> ${reserva.ninos_menores}</p>
+                    <p><strong>Total personas con plaza:</strong> ${reserva.total_personas}</p>
+                </div>
+                
+                <div class="detail-section">
+                    <h4>💰 Información de Precios</h4>
+                    <p><strong>Precio base:</strong> ${parseFloat(reserva.precio_base).toFixed(2)}€</p>
+                    <p><strong>Descuento total:</strong> ${parseFloat(reserva.descuento_total).toFixed(2)}€</p>
+                    <p><strong>Precio final:</strong> <span class="price-final">${parseFloat(reserva.precio_final).toFixed(2)}€</span></p>
+                    <p><strong>Método de pago:</strong> ${reserva.metodo_pago}</p>
+                </div>
+            </div>
+            
+            ${descuentoInfo}
+        </div>
+    `;
+
+    document.getElementById('agencyReservationModalTitle').textContent = `Detalles de Reserva - ${reserva.localizador}`;
+    document.getElementById('agency-reservation-details-content').innerHTML = detailsHtml;
+}
+
+/**
+ * Descargar PDF de ticket para agencia
+ */
+function downloadAgencyTicketPDF(reservaId, localizador) {
+    console.log('📄 Descargando PDF para agencia - reserva:', reservaId, localizador);
+
+    if (!reservaId || !localizador) {
+        alert('❌ Datos de reserva no válidos');
+        return;
+    }
+
+    // Mostrar indicador de carga
+    showPDFLoadingIndicator();
+
+    const formData = new FormData();
+    formData.append('action', 'generate_agency_ticket_pdf');
+    formData.append('reserva_id', reservaId);
+    formData.append('nonce', reservasAjax.nonce);
+
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            hidePDFLoadingIndicator();
+
+            if (data.success && data.data.pdf_url) {
+                console.log('✅ PDF generado exitosamente para agencia');
+
+                // Descargar automáticamente
+                const link = document.createElement('a');
+                link.href = data.data.pdf_url;
+                link.download = data.data.filename || `billete_${localizador}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // Mostrar mensaje de éxito
+                showTemporaryNotification('✅ PDF descargado correctamente', 'success', 3000);
+            } else {
+                console.error('❌ Error generando PDF:', data.data);
+                alert('❌ Error generando el PDF: ' + (data.data || 'Error desconocido'));
+            }
+        })
+        .catch(error => {
+            hidePDFLoadingIndicator();
+            console.error('❌ Error de conexión:', error);
+            alert('❌ Error de conexión al generar el PDF');
+        });
+}
+
+/**
+ * Cancelar reserva para agencia
+ */
+function showAgencyCancelReservationModal(reservaId, localizador) {
+    // Crear modal si no existe
+    if (!document.getElementById('agencyCancelReservationModal')) {
+        const modalHtml = `
+            <div id="agencyCancelReservationModal" class="modal" style="display: none;">
+                <div class="modal-content" style="max-width: 500px;">
+                    <span class="close" onclick="closeAgencyCancelReservationModal()">&times;</span>
+                    <h3 style="color: #dc3545;">⚠️ Solicitar Cancelación de Reserva</h3>
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ffc107;">
+                        <p style="margin: 0; color: #856404; font-weight: bold;">
+                            ¿Estás seguro de que quieres solicitar la cancelación de la reserva <strong id="agency-cancel-localizador"></strong>?
+                        </p>
+                        <p style="margin: 5px 0 0 0; color: #856404; font-size: 14px;">
+                            Esta solicitud será enviada al administrador para su revisión y aprobación.
+                        </p>
+                    </div>
+                    <form id="agencyCancelReservationForm">
+                        <input type="hidden" id="agency-cancel-reserva-id">
+                        <div class="form-group">
+                            <label for="agency-motivo-cancelacion" style="font-weight: bold; color: #495057;">
+                                Motivo de la solicitud de cancelación (obligatorio):
+                            </label>
+                            <textarea id="agency-motivo-cancelacion" name="motivo_cancelacion" 
+                                      rows="3" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;" 
+                                      placeholder="Ej: El cliente solicita cancelación, cambio de planes, etc." required></textarea>
+                        </div>
+                        <div class="form-actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                            <button type="button" class="btn-secondary" onclick="closeAgencyCancelReservationModal()">
+                                Cancelar
+                            </button>
+                            <button type="submit" class="btn-danger" style="background: #dc3545; color: white;">
+                                📧 Enviar Solicitud
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Añadir evento al formulario
+        document.getElementById('agencyCancelReservationForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            processAgencyCancelRequest();
+        });
+    }
+
+    // Configurar modal
+    document.getElementById('agency-cancel-reserva-id').value = reservaId;
+    document.getElementById('agency-cancel-localizador').textContent = localizador;
+    document.getElementById('agency-motivo-cancelacion').value = '';
+    document.getElementById('agencyCancelReservationModal').style.display = 'block';
+}
+
+/**
+ * Cerrar modal de cancelación de agencia
+ */
+function closeAgencyCancelReservationModal() {
+    document.getElementById('agencyCancelReservationModal').style.display = 'none';
+}
+
+/**
+ * Procesar solicitud de cancelación de agencia
+ */
+function processAgencyCancelRequest() {
+    const reservaId = document.getElementById('agency-cancel-reserva-id').value;
+    const motivo = document.getElementById('agency-motivo-cancelacion').value.trim();
+
+    if (!motivo) {
+        alert('Por favor, especifica el motivo de la solicitud de cancelación.');
+        return;
+    }
+
+    if (!confirm('¿Estás seguro de enviar esta solicitud de cancelación al administrador?')) {
+        return;
+    }
+
+    // Deshabilitar botón
+    const submitBtn = document.querySelector('#agencyCancelReservationForm button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Enviando...';
+
+    const formData = new FormData();
+    formData.append('action', 'request_agency_cancellation');
+    formData.append('reserva_id', reservaId);
+    formData.append('motivo_cancelacion', motivo);
+    formData.append('nonce', reservasAjax.nonce);
+
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        body: formData
+    })
+        .then(response => response.json())
+        .then(data => {
+            // Rehabilitar botón
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+
+            if (data.success) {
+                alert('✅ ' + data.data);
+                closeAgencyCancelReservationModal();
+
+                // Recargar la lista de reservas
+                loadAgencyReservationsByDateWithFilters();
+            } else {
+                alert('❌ Error: ' + data.data);
+            }
+        })
+        .catch(error => {
+            // Rehabilitar botón
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+
+            console.error('Error:', error);
+            alert('❌ Error de conexión al enviar la solicitud');
+        });
+}
+
+/**
+ * Cerrar modal de detalles de reserva de agencia
+ */
+function closeAgencyReservationDetailsModal() {
+    document.getElementById('agencyReservationDetailsModal').style.display = 'none';
+}
+
+// Exponer funciones globalmente
+window.showAgencyReservationDetails = showAgencyReservationDetails;
+window.downloadAgencyTicketPDF = downloadAgencyTicketPDF;
+window.showAgencyCancelReservationModal = showAgencyCancelReservationModal;
+window.closeAgencyCancelReservationModal = closeAgencyCancelReservationModal;
+window.closeAgencyReservationDetailsModal = closeAgencyReservationDetailsModal;
