@@ -559,6 +559,7 @@ private function crear_reserva($datos_personales, $datos_reserva, $calculo_preci
     // ✅ PREPARAR DATOS PARA INSERTAR CON REDSYS_ORDER_ID
     $reserva_data = array(
         'localizador' => $localizador,
+        'redsys_order_id' => $datos_reserva['order_id'] ?? null, // ✅ ASEGURAR QUE SE GUARDA
         'servicio_id' => $datos_reserva['service_id'],
         'fecha' => $datos_reserva['fecha'],
         'hora' => $datos_reserva['hora_ida'],
@@ -578,7 +579,7 @@ private function crear_reserva($datos_personales, $datos_reserva, $calculo_preci
         'regla_descuento_aplicada' => $calculo_precio['regla_descuento_aplicada'] ? json_encode($calculo_precio['regla_descuento_aplicada']) : null,
         'estado' => 'confirmada',
         'metodo_pago' => 'redsys',
-        'redsys_order_id' => $datos_reserva['order_id'] ?? null
+        'created_at' => current_time('mysql')
     );
 
     error_log('Datos de reserva a insertar: ' . print_r($reserva_data, true));
@@ -592,7 +593,7 @@ private function crear_reserva($datos_personales, $datos_reserva, $calculo_preci
     }
 
     $reserva_id = $wpdb->insert_id;
-    error_log('Reserva insertada con ID: ' . $reserva_id . ' y redsys_order_id: ' . ($datos_reserva['order_id'] ?? 'null'));
+    error_log('✅ Reserva insertada con ID: ' . $reserva_id . ' y redsys_order_id: ' . ($datos_reserva['order_id'] ?? 'null'));
 
     return array(
         'exito' => true,

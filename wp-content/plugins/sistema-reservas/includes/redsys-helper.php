@@ -144,12 +144,14 @@ function is_production_environment() {
 }
 
 function guardar_datos_pedido($order_id, $reserva_data) {
-    // Guardar en sesión para verificar después
+    error_log('=== GUARDANDO DATOS DEL PEDIDO ===');
+    error_log("Order ID: $order_id");
+    
+    // Guardar en sesión
     if (!session_id()) {
         session_start();
     }
     
-    // Guardar en sesión
     if (!isset($_SESSION['pending_orders'])) {
         $_SESSION['pending_orders'] = array();
     }
@@ -160,24 +162,56 @@ function guardar_datos_pedido($order_id, $reserva_data) {
         'status' => 'pending'
     );
     
-    // También guardar en transient de WordPress por seguridad
+    // ✅ MEJORAR PERSISTENCIA - Múltiples métodos de guardado
+    
+    // Transient principal
     set_transient('redsys_order_' . $order_id, $reserva_data, 3600); // 1 hora
     
-    error_log("✅ Datos del pedido $order_id guardados para verificación posterior");
+    // ✅ Option temporal como backup
+    update_option('temp_order_' . $order_id, $reserva_data, false);
+    
+    // ✅ Guardar también con una clave más genérica
+    set_transient('latest_pending_order', array(
+        'order_id' => $order_id,
+        'data' => $reserva_data,
+        'timestamp' => time()
+    ), 3600);
+    
+    error_log("✅ Datos del pedido $order_id guardados en múltiples ubicaciones");
+    error_log("- Sesión: " . (isset($_SESSION['pending_orders'][$order_id]) ? 'OK' : 'FALLO'));
+    error_log("- Transient: " . (get_transient('redsys_order_' . $order_id) ? 'OK' : 'FALLO'));
+    error_log("- Option: " . (get_option('temp_order_' . $order_id) ? 'OK' : 'FALLO'));
 }
 
 function process_successful_payment($order_id, $params) {
     error_log('=== PROCESANDO PAGO EXITOSO ===');
     error_log("Order ID: $order_id");
+    error_log("Params: " . print_r($params, true));
     
-    // Recuperar datos de la reserva
+    // ✅ MEJORAR RECUPERACIÓN DE DATOS
+    $reservation_data = null;
+    
+    // Método 1: Transient
     $reservation_data = get_transient('redsys_order_' . $order_id);
+    error_log("Datos desde transient: " . ($reservation_data ? 'ENCONTRADOS' : 'NO ENCONTRADOS'));
     
+    // Método 2: Session
     if (!$reservation_data) {
         if (!session_id()) {
             session_start();
         }
-        $reservation_data = $_SESSION['pending_orders'][$order_id]['reservation_data'] ?? null;
+        if (isset($_SESSION['pending_orders'][$order_id])) {
+            $reservation_data = $_SESSION['pending_orders'][$order_id]['reservation_data'];
+            error_log("Datos desde sesión: ENCONTRADOS");
+        } else {
+            error_log("Datos desde sesión: NO ENCONTRADOS");
+        }
+    }
+    
+    // ✅ Método 3: Option temporal (nuevo fallback)
+    if (!$reservation_data) {
+        $reservation_data = get_option('temp_order_' . $order_id);
+        error_log("Datos desde option: " . ($reservation_data ? 'ENCONTRADOS' : 'NO ENCONTRADOS'));
     }
     
     if (!$reservation_data) {
@@ -211,14 +245,23 @@ function process_successful_payment($order_id, $params) {
         if ($result['success']) {
             error_log('✅ Reserva procesada exitosamente: ' . $result['data']['localizador']);
             
-            // Guardar datos para la página de confirmación
+            // ✅ GUARDAR MÚLTIPLES COPIAS DE LOS DATOS PARA LA CONFIRMACIÓN
             if (!session_id()) {
                 session_start();
             }
             $_SESSION['confirmed_reservation'] = $result['data'];
             
+            // Guardar también en transients con múltiples claves
+            set_transient('confirmed_reservation_' . $order_id, $result['data'], 3600);
+            set_transient('latest_confirmed_reservation', $result['data'], 3600);
+            set_transient('confirmed_by_localizador_' . $result['data']['localizador'], $result['data'], 3600);
+            
+            // ✅ Guardar también en option temporal
+            update_option('temp_confirmed_' . $order_id, $result['data'], false);
+            
             // Limpiar datos temporales
             delete_transient('redsys_order_' . $order_id);
+            delete_option('temp_order_' . $order_id);
             if (isset($_SESSION['pending_orders'][$order_id])) {
                 unset($_SESSION['pending_orders'][$order_id]);
             }

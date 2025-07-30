@@ -1699,6 +1699,7 @@ add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
 
 function handle_redsys_notification() {
     error_log('🔁 Recibida notificación de Redsys (MerchantURL)');
+    error_log('POST data: ' . print_r($_POST, true));
 
     $params = $_POST['Ds_MerchantParameters'] ?? '';
     $signature = $_POST['Ds_Signature'] ?? '';
@@ -1707,34 +1708,51 @@ function handle_redsys_notification() {
     if (!$params || !$signature) {
         error_log('❌ Faltan parámetros en notificación');
         status_header(400);
-        exit;
+        exit('ERROR: Missing parameters');
+    }
+
+    if (!class_exists('RedsysAPI')) {
+        require_once RESERVAS_PLUGIN_PATH . 'includes/redsys-api.php';
     }
 
     $redsys = new RedsysAPI();
     $decoded = $redsys->getParametersFromResponse($params);
+    
+    error_log('Parámetros decodificados: ' . print_r($decoded, true));
 
     $order_id = $decoded['Ds_Order'] ?? null;
+    $response_code = $decoded['Ds_Response'] ?? null;
 
     if (!$order_id) {
         error_log('❌ No se pudo obtener el ID del pedido');
         status_header(400);
-        exit;
+        exit('ERROR: No order ID');
     }
 
-    // ✅ SELECCIONAR CLAVE SEGÚN EL ENTORNO
-    if (is_production_environment()) {
-        $clave = 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9'; // ✅ PRODUCCIÓN
-    } else {
-        $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7'; // PRUEBAS
+    // ✅ VERIFICAR QUE EL PAGO FUE EXITOSO
+    $response_code = intval($response_code);
+    if ($response_code < 0 || $response_code > 99) {
+        error_log("❌ Pago fallido. Código de respuesta: $response_code");
+        status_header(400);
+        exit('ERROR: Payment failed');
     }
+
+    // Verificar firma
+    $clave = is_production_environment() ? 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9' : 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
 
     if (!$redsys->verifySignature($signature, $params, $clave)) {
         error_log('❌ Firma inválida en notificación');
         status_header(403);
-        exit;
+        exit('ERROR: Invalid signature');
     }
 
     error_log('✅ Firma verificada, procesando reserva...');
+    
+    // ✅ CARGAR FUNCIÓN DE PROCESAMIENTO
+    if (!function_exists('process_successful_payment')) {
+        require_once RESERVAS_PLUGIN_PATH . 'includes/redsys-helper.php';
+    }
+    
     $ok = process_successful_payment($order_id, $decoded);
 
     if ($ok) {
@@ -1748,6 +1766,23 @@ function handle_redsys_notification() {
     }
 
     exit;
+}
+
+// ✅ VERIFICAR Y CREAR CAMPO redsys_order_id SI NO EXISTE
+add_action('wp_loaded', 'ensure_redsys_order_id_field');
+
+function ensure_redsys_order_id_field() {
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    
+    // Verificar si el campo existe
+    $field_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_reservas LIKE 'redsys_order_id'");
+    
+    if (empty($field_exists)) {
+        $wpdb->query("ALTER TABLE $table_reservas ADD COLUMN redsys_order_id VARCHAR(20) NULL AFTER localizador");
+        $wpdb->query("ALTER TABLE $table_reservas ADD INDEX redsys_order_id (redsys_order_id)");
+        error_log('✅ Campo redsys_order_id añadido a tabla de reservas');
+    }
 }
 
 // Nuevo endpoint para cargar datos de reserva confirmada
@@ -1806,7 +1841,7 @@ function ajax_get_confirmed_reservation_data() {
     error_log('=== INTENTANDO RECUPERAR DATOS DE CONFIRMACIÓN ===');
     error_log('Order ID recibido: ' . $order_id);
     
-    // ✅ MÉTODO 1: Desde URL (order_id)
+    // ✅ MÉTODO 1: Desde URL (order_id) - CORREGIDO
     if (!empty($order_id)) {
         // Buscar en transients
         $data = get_transient('confirmed_reservation_' . $order_id);
@@ -1817,14 +1852,14 @@ function ajax_get_confirmed_reservation_data() {
         }
         
         // Buscar en options temporales
-        $data = get_option('temp_reservation_' . $order_id);
+        $data = get_option('temp_confirmed_' . $order_id);
         if ($data) {
             error_log('✅ Datos encontrados en options por order_id');
             wp_send_json_success($data);
             return;
         }
         
-        // ✅ NUEVO: Buscar en BD por redsys_order_id
+        // ✅ BUSCAR EN BD POR REDSYS_ORDER_ID - CORREGIDO SIN prepare()
         global $wpdb;
         $table_reservas = $wpdb->prefix . 'reservas_reservas';
         
@@ -1834,7 +1869,7 @@ function ajax_get_confirmed_reservation_data() {
         ));
         
         if ($reserva) {
-            error_log('✅ Reserva encontrada en BD por redsys_order_id');
+            error_log('✅ Reserva encontrada en BD por redsys_order_id: ' . $reserva->localizador);
             $data = array(
                 'localizador' => $reserva->localizador,
                 'reserva_id' => $reserva->id,
@@ -1845,27 +1880,42 @@ function ajax_get_confirmed_reservation_data() {
                     'precio_final' => $reserva->precio_final
                 )
             );
+            
+            // Guardar para futuras consultas
+            set_transient('confirmed_reservation_' . $order_id, $data, 3600);
+            
             wp_send_json_success($data);
             return;
         }
     }
     
-    // ✅ MÉTODO 2: Transient genérico para la más reciente
-    $data = get_transient('latest_confirmed_reservation');
-    if ($data) {
-        error_log('✅ Datos encontrados en transient genérico');
-        wp_send_json_success($data);
-        return;
-    }
+    // ✅ MÉTODO 2: Buscar la más reciente en BD - CORREGIDO
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
     
-    // ✅ MÉTODO 3: Desde sesión
-    if (!session_id()) {
-        session_start();
-    }
+    // ✅ CONSULTA CORREGIDA SIN ERROR DE prepare()
+    $recent_reservation = $wpdb->get_row(
+        "SELECT * FROM $table_reservas 
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+         AND estado = 'confirmada'
+         ORDER BY created_at DESC 
+         LIMIT 1"
+    );
     
-    if (isset($_SESSION['confirmed_reservation'])) {
-        error_log('✅ Datos encontrados en sesión');
-        $data = $_SESSION['confirmed_reservation'];
+    if ($recent_reservation) {
+        error_log('✅ Reserva reciente encontrada en BD como fallback: ' . $recent_reservation->localizador);
+        
+        $data = array(
+            'localizador' => $recent_reservation->localizador,
+            'reserva_id' => $recent_reservation->id,
+            'detalles' => array(
+                'fecha' => $recent_reservation->fecha,
+                'hora' => $recent_reservation->hora,
+                'personas' => $recent_reservation->total_personas,
+                'precio_final' => $recent_reservation->precio_final
+            )
+        );
+        
         wp_send_json_success($data);
         return;
     }
@@ -1888,15 +1938,15 @@ function ajax_get_most_recent_reservation() {
     global $wpdb;
     $table_reservas = $wpdb->prefix . 'reservas_reservas';
     
-    // ✅ AMPLIAR VENTANA DE BÚSQUEDA Y MEJORAR CONSULTA
-    $recent_reservation = $wpdb->get_row($wpdb->prepare(
+    // ✅ CONSULTA CORREGIDA SIN ERROR DE prepare()
+    $recent_reservation = $wpdb->get_row(
         "SELECT * FROM $table_reservas 
          WHERE created_at >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
          AND metodo_pago = 'redsys'
          AND estado = 'confirmada'
          ORDER BY created_at DESC 
          LIMIT 1"
-    ));
+    );
     
     if ($recent_reservation) {
         error_log('✅ Reserva reciente encontrada en BD: ' . $recent_reservation->localizador);
@@ -1940,6 +1990,34 @@ register_activation_hook(__FILE__, 'add_redsys_order_id_field');
 
 // También ejecutar al cargar admin (por si ya está activado)
 add_action('admin_init', 'add_redsys_order_id_field');
+
+// ✅ FUNCIÓN DE DEBUG PARA VERIFICAR RESERVAS
+add_action('wp_ajax_debug_reservas_recientes', 'debug_reservas_recientes');
+add_action('wp_ajax_nopriv_debug_reservas_recientes', 'debug_reservas_recientes');
+
+function debug_reservas_recientes() {
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    
+    $reservas = $wpdb->get_results(
+        "SELECT id, localizador, redsys_order_id, metodo_pago, estado, created_at 
+         FROM $table_reservas 
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 60 MINUTE)
+         ORDER BY created_at DESC"
+    );
+    
+    error_log('=== DEBUG RESERVAS RECIENTES ===');
+    error_log('Total reservas última hora: ' . count($reservas));
+    
+    foreach ($reservas as $reserva) {
+        error_log("- ID: {$reserva->id}, Localizador: {$reserva->localizador}, Order: {$reserva->redsys_order_id}, Método: {$reserva->metodo_pago}, Estado: {$reserva->estado}, Fecha: {$reserva->created_at}");
+    }
+    
+    wp_send_json_success(array(
+        'total' => count($reservas),
+        'reservas' => $reservas
+    ));
+}
 
 // Inicializar el plugin
 new SistemaReservas();
