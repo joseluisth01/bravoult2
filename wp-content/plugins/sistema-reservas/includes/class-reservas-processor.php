@@ -311,91 +311,100 @@ class ReservasProcessor
  * Procesar reserva cuando el pago viene de Redsys
  */
 public function process_reservation_payment($data) {
+    error_log('=== PROCESANDO RESERVA CON PAGO ===');
+    error_log('Datos recibidos: ' . print_r($data, true));
+    
     try {
-        error_log('=== PROCESANDO RESERVA CON PAGO REDSYS ===');
-        error_log('Datos recibidos: ' . print_r($data, true));
+        global $wpdb;
         
         // Decodificar datos de reserva
         $reservation_data = json_decode($data['reservation_data'], true);
-        
         if (!$reservation_data) {
-            return array('success' => false, 'message' => 'Datos de reserva inválidos');
+            throw new Exception('Datos de reserva inválidos');
         }
         
-        // Validar datos personales
-        $datos_personales = array(
-            'nombre' => sanitize_text_field($data['nombre']),
-            'apellidos' => sanitize_text_field($data['apellidos']),
-            'email' => sanitize_email($data['email']),
-            'telefono' => sanitize_text_field($data['telefono'])
+        // Obtener datos del servicio
+        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+        $servicio = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_servicios WHERE id = %d",
+            $reservation_data['service_id']
+        ));
+        
+        if (!$servicio) {
+            throw new Exception('Servicio no encontrado');
+        }
+        
+        // Generar localizador
+        $localizador = $this->generate_localizador();
+        
+        // Preparar datos para insertar
+        $reserva_insert = array(
+            'localizador' => $localizador,
+            'redsys_order_id' => $data['order_id'] ?? null, // ✅ AÑADIR ESTO
+            'servicio_id' => $reservation_data['service_id'],
+            'fecha' => $reservation_data['fecha'],
+            'hora' => $reservation_data['hora_ida'],
+            'hora_vuelta' => $reservation_data['hora_vuelta'] ?? null,
+            'nombre' => $data['nombre'],
+            'apellidos' => $data['apellidos'],
+            'email' => $data['email'],
+            'telefono' => $data['telefono'],
+            'adultos' => intval($reservation_data['adultos']),
+            'residentes' => intval($reservation_data['residentes']),
+            'ninos_5_12' => intval($reservation_data['ninos_5_12']),
+            'ninos_menores' => intval($reservation_data['ninos_menores']),
+            'total_personas' => intval($reservation_data['adultos']) + intval($reservation_data['residentes']) + intval($reservation_data['ninos_5_12']),
+            'precio_base' => floatval($reservation_data['total_price']) + floatval($reservation_data['descuento_grupo'] ?? 0),
+            'descuento_total' => floatval($reservation_data['descuento_grupo'] ?? 0),
+            'precio_final' => floatval($reservation_data['total_price']),
+            'regla_descuento_aplicada' => isset($reservation_data['regla_descuento_aplicada']) ? 
+                json_encode($reservation_data['regla_descuento_aplicada']) : null,
+            'estado' => 'confirmada',
+            'metodo_pago' => $data['metodo_pago'] ?? 'redsys',
+            'created_at' => current_time('mysql')
         );
         
-        // Validar datos de reserva
-        if (!isset($reservation_data['service_id'])) {
-            return array('success' => false, 'message' => 'Datos de servicio inválidos');
+        // Insertar reserva
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        $result = $wpdb->insert($table_reservas, $reserva_insert);
+        
+        if ($result === false) {
+            throw new Exception('Error insertando reserva: ' . $wpdb->last_error);
         }
         
-        // Calcular total de personas
-        $adultos = intval($reservation_data['adultos']);
-        $residentes = intval($reservation_data['residentes']);
-        $ninos_5_12 = intval($reservation_data['ninos_5_12']);
-        $ninos_menores = intval($reservation_data['ninos_menores']);
-        $total_personas = $adultos + $residentes + $ninos_5_12;
-        
-        $reservation_data['total_personas'] = $total_personas;
-        $reservation_data['total_viajeros'] = $total_personas + $ninos_menores;
-        $reservation_data['order_id'] = $data['order_id'] ?? null;
-        
-        // Verificar disponibilidad
-        $servicio = $this->verificar_disponibilidad($reservation_data['service_id'], $total_personas);
-        if (!$servicio['disponible']) {
-            return array('success' => false, 'message' => $servicio['error']);
-        }
-        
-        // Recalcular precios
-        $calculo_precio = $this->recalcular_precio($reservation_data);
-        if (!$calculo_precio['valido']) {
-            return array('success' => false, 'message' => $calculo_precio['error']);
-        }
-        
-        // Crear la reserva
-        $resultado_reserva = $this->crear_reserva(
-            $datos_personales,
-            $reservation_data,
-            $calculo_precio['precio']
-        );
-        
-        if (!$resultado_reserva['exito']) {
-            return array('success' => false, 'message' => $resultado_reserva['error']);
-        }
+        $reserva_id = $wpdb->insert_id;
         
         // Actualizar plazas disponibles
-        $actualizacion = $this->actualizar_plazas_disponibles(
-            $reservation_data['service_id'],
-            $total_personas
-        );
+        $wpdb->query($wpdb->prepare(
+            "UPDATE $table_servicios SET plazas_disponibles = plazas_disponibles - %d WHERE id = %d",
+            $reserva_insert['total_personas'],
+            $reservation_data['service_id']
+        ));
         
-        if (!$actualizacion['exito']) {
-            $this->eliminar_reserva($resultado_reserva['reserva_id']);
-            return array('success' => false, 'message' => 'Error actualizando disponibilidad');
-        }
+        // Preparar datos completos para emails y respuesta
+        $reserva_completa = array_merge($reserva_insert, array(
+            'id' => $reserva_id,
+            'precio_adulto' => $servicio->precio_adulto,
+            'precio_nino' => $servicio->precio_nino,
+            'precio_residente' => $servicio->precio_residente
+        ));
         
-        // Enviar emails de confirmación
-        $this->send_confirmation_emails($resultado_reserva['reserva_id']);
+        // Enviar emails
+        $this->send_confirmation_emails($reserva_completa);
         
-        // ✅ RESPUESTA CON DATOS COMPLETOS PARA PÁGINA DE CONFIRMACIÓN
+        // Preparar respuesta
         $response_data = array(
-            'localizador' => $resultado_reserva['localizador'],
-            'reserva_id' => $resultado_reserva['reserva_id'],
+            'localizador' => $localizador,
+            'reserva_id' => $reserva_id,
             'detalles' => array(
                 'fecha' => $reservation_data['fecha'],
                 'hora' => $reservation_data['hora_ida'],
-                'personas' => $total_personas,
-                'precio_final' => $calculo_precio['precio']['precio_final']
+                'personas' => $reserva_insert['total_personas'],
+                'precio_final' => $reservation_data['total_price']
             )
         );
         
-        error_log('✅ Reserva procesada exitosamente, datos de respuesta: ' . print_r($response_data, true));
+        error_log('✅ Reserva procesada exitosamente: ' . $localizador);
         
         return array(
             'success' => true,
@@ -403,8 +412,11 @@ public function process_reservation_payment($data) {
         );
         
     } catch (Exception $e) {
-        error_log('ERROR en process_reservation_payment: ' . $e->getMessage());
-        return array('success' => false, 'message' => 'Error interno del servidor: ' . $e->getMessage());
+        error_log('❌ Error procesando reserva: ' . $e->getMessage());
+        return array(
+            'success' => false,
+            'message' => $e->getMessage()
+        );
     }
 }
 

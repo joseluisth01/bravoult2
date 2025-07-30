@@ -1919,5 +1919,27 @@ function ajax_get_most_recent_reservation() {
     }
 }
 
+// Añadir al final de sistema-reservas.php, antes de "new SistemaReservas();"
+
+function add_redsys_order_id_field() {
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    
+    // Verificar si el campo existe
+    $field_exists = $wpdb->get_results("SHOW COLUMNS FROM $table_reservas LIKE 'redsys_order_id'");
+    
+    if (empty($field_exists)) {
+        $wpdb->query("ALTER TABLE $table_reservas ADD COLUMN redsys_order_id VARCHAR(20) NULL AFTER localizador");
+        $wpdb->query("ALTER TABLE $table_reservas ADD INDEX redsys_order_id (redsys_order_id)");
+        error_log('✅ Campo redsys_order_id añadido a tabla de reservas');
+    }
+}
+
+// Ejecutar al activar el plugin
+register_activation_hook(__FILE__, 'add_redsys_order_id_field');
+
+// También ejecutar al cargar admin (por si ya está activado)
+add_action('admin_init', 'add_redsys_order_id_field');
+
 // Inicializar el plugin
 new SistemaReservas();

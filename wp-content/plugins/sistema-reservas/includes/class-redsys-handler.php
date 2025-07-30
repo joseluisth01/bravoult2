@@ -139,6 +139,7 @@ function is_production_environment() {
 function process_successful_payment($order_id, $params) {
     error_log('=== PROCESANDO PAGO EXITOSO CON REDSYS ===');
     error_log("Order ID: $order_id");
+    error_log("Params: " . print_r($params, true));
     
     // Recuperar datos de la reserva
     $reservation_data = get_transient('redsys_order_' . $order_id);
@@ -172,7 +173,7 @@ function process_successful_payment($order_id, $params) {
             'reservation_data' => json_encode($reservation_data),
             'metodo_pago' => 'redsys',
             'transaction_id' => $params['Ds_AuthorisationCode'] ?? '',
-            'order_id' => $order_id
+            'order_id' => $order_id // ✅ AÑADIR ESTO
         );
 
         // Procesar la reserva usando el método existente
@@ -181,7 +182,7 @@ function process_successful_payment($order_id, $params) {
         if ($result['success']) {
             error_log('✅ Reserva procesada exitosamente: ' . $result['data']['localizador']);
             
-            // ✅ GUARDAR EN MÚLTIPLES LUGARES PARA ASEGURAR QUE LLEGUE A LA PÁGINA DE CONFIRMACIÓN
+            // ✅ GUARDAR DATOS PARA LA PÁGINA DE CONFIRMACIÓN DE MÚLTIPLES FORMAS
             if (!session_id()) {
                 session_start();
             }
@@ -195,12 +196,12 @@ function process_successful_payment($order_id, $params) {
             // 3. Guardar con el localizador también
             set_transient('confirmed_reservation_loc_' . $result['data']['localizador'], $result['data'], 3600);
             
-            // 4. ✅ NUEVO: Guardar en base de datos temporal para mayor seguridad
+            // 4. Guardar como última reserva confirmada
+            set_transient('latest_confirmed_reservation', $result['data'], 1800); // 30 minutos
+            
+            // 5. Guardar en BD temporal para mayor seguridad
             update_option('temp_reservation_' . $order_id, $result['data'], false);
             update_option('temp_reservation_loc_' . $result['data']['localizador'], $result['data'], false);
-            
-            // 5. ✅ GUARDAR EN sessionStorage TAMBIÉN (para JavaScript)
-            $_SESSION['reserva_para_js'] = $result['data'];
             
             error_log('✅ Datos de confirmación guardados en múltiples ubicaciones');
             error_log('- Localizador: ' . $result['data']['localizador']);
