@@ -6,15 +6,25 @@
 require_once __DIR__ . '/redsys-api.php';
 
 function generar_formulario_redsys($reserva_data) {
-    error_log('=== INICIANDO GENERACIÓN FORMULARIO REDSYS ===');
+        error_log('=== INICIANDO GENERACIÓN FORMULARIO REDSYS ===');
     error_log('Datos recibidos: ' . print_r($reserva_data, true));
     
     $miObj = new RedsysAPI();
 
-    // ⚠️ IMPORTANTE: Configurar estos valores con tus datos reales de Redsys
-    $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7'; // Tu clave de firma
-    $codigo_comercio = '014591697'; // Tu código FUC
-    $terminal = '001'; // Tu terminal
+    // ✅ CONFIGURACIÓN ACTUALIZADA PARA PRODUCCIÓN
+    if (is_production_environment()) {
+        // DATOS DE PRODUCCIÓN
+        $clave = 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9'; // ✅ TU NUEVA CLAVE DE PRODUCCIÓN
+        $codigo_comercio = '014591697'; // Tu código FUC (debería ser el mismo)
+        $terminal = '001'; // Tu terminal (debería ser el mismo)
+        error_log('🟢 USANDO CONFIGURACIÓN DE PRODUCCIÓN');
+    } else {
+        // DATOS DE PRUEBAS (mantener los antiguos para desarrollo)
+        $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
+        $codigo_comercio = '014591697';
+        $terminal = '001';
+        error_log('🟡 USANDO CONFIGURACIÓN DE PRUEBAS');
+    }
     
     // ✅ MEJORAR EL MANEJO DEL IMPORTE
     $total_price = null;
@@ -100,10 +110,9 @@ function generar_formulario_redsys($reserva_data) {
     error_log("Parámetros codificados: " . $params);
     error_log("Firma generada: " . $signature);
 
-    // URL del entorno (importante: cambiar según sea producción o pruebas)
     $redsys_url = is_production_environment() ? 
-        'https://sis.redsys.es/sis/realizarPago' : 
-        'https://sis-t.redsys.es:25443/sis/realizarPago';
+        'https://sis.redsys.es/sis/realizarPago' :        // ✅ PRODUCCIÓN
+        'https://sis-t.redsys.es:25443/sis/realizarPago'; // PRUEBAS
     
     error_log("URL de Redsys: " . $redsys_url);
 
@@ -130,15 +139,22 @@ function generar_formulario_redsys($reserva_data) {
 }
 
 function is_production_environment() {
-    // Detectar si estamos en producción
+    // ✅ CAMBIAR ESTO: Detectar si estamos en producción
     $site_url = site_url();
     
     error_log("Site URL: " . $site_url);
     
+    // Detectar si es producción (NO contiene palabras de desarrollo)
     $is_prod = !strpos($site_url, 'localhost') && 
                !strpos($site_url, '.local') && 
                !strpos($site_url, 'dev.') &&
-               !strpos($site_url, 'staging.');
+               !strpos($site_url, 'staging.') &&
+               !strpos($site_url, 'test.');
+    
+    // ✅ FORZAR A PRODUCCIÓN SI EL DOMINIO ES EL REAL
+    if (strpos($site_url, 'autobusmedinaazahara.com') !== false) {
+        $is_prod = true;
+    }
     
     error_log("Es producción: " . ($is_prod ? 'SÍ' : 'NO'));
     

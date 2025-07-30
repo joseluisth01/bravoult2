@@ -1721,10 +1721,12 @@ function handle_redsys_notification() {
         exit;
     }
 
-    // Selecciona la clave según el entorno
-    $clave = is_production_environment()
-        ? 'TU_CLAVE_PRODUCCION'
-        : 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
+    // ✅ SELECCIONAR CLAVE SEGÚN EL ENTORNO
+    if (is_production_environment()) {
+        $clave = 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9'; // ✅ PRODUCCIÓN
+    } else {
+        $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7'; // PRUEBAS
+    }
 
     if (!$redsys->verifySignature($signature, $params, $clave)) {
         error_log('❌ Firma inválida en notificación');

@@ -16,6 +16,22 @@
     width: 100%;
 }
 
+.btn-small.btn-success {
+    background: #28a745;
+    color: white;
+    border: 1px solid #28a745;
+}
+
+.btn-small.btn-success:hover {
+    background: #218838;
+    border-color: #1e7e34;
+}
+
+/* Mejorar espaciado de botones */
+.actions-cell .btn-small {
+    margin: 1px;
+}
+
 .reservas-login-form h2 {
     text-align: center;
     margin-bottom: 30px;

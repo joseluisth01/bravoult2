@@ -2455,18 +2455,20 @@ let agencyInfo = 'Directa';
                    <td><span class="agency-badge ${agencyClass}">${agencyInfo}</span></td>
                    <td><small>${fechaCompraFormateada}</small></td>
                    <td>
-                       <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
-                       <button class="btn-small btn-edit" onclick="showEditEmailModal(${reserva.id}, '${reserva.email}')" title="Editar email">✏️</button>
-                       ${reserva.estado !== 'cancelada' ?
-                   `<button class="btn-small btn-warning" onclick="showEditReservationModal(${reserva.id})" title="Editar fecha/horario">📅</button>` :
-                   ''
-               }
-                       <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
-                       ${reserva.estado !== 'cancelada' ?
-                   `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
-                   `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
-               }
-                   </td>
+                        <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
+                        
+                        ${reserva.estado !== 'cancelada' ?
+                            `<button class="btn-small btn-warning" onclick="showEditReservationModal(${reserva.id})" title="Editar fecha/horario">📅</button>` :
+                            ''
+                        }
+                        <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
+                        <!-- ✅ AÑADIR ESTE BOTÓN -->
+                        <button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
+                        ${reserva.estado !== 'cancelada' ?
+                            `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
+                            `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
+                        }
+                    </td>
                </tr>
            `;
        });
@@ -3045,14 +3047,16 @@ function renderSearchResults(data) {
                     <td title="Adultos: ${reserva.adultos}, Residentes: ${reserva.residentes}, Niños 5-12: ${reserva.ninos_5_12}, Menores: ${reserva.ninos_menores}">${personasDetalle}</td>
                     <td><strong>${parseFloat(reserva.precio_final).toFixed(2)}€</strong></td>
                     <td>
-            <button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
-    <button class="btn-small btn-edit" onclick="showEditEmailModal(${reserva.id}, '${reserva.email}')" title="Editar email">✏️</button>
-    <button class="btn-small btn-warning" onclick="showEditReservationModal(${reserva.id})" title="Editar fecha/horario">📅</button>
-    <button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
-        ${reserva.estado !== 'cancelada' ?
-                    `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
-                    `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
-                }
+<button class="btn-small btn-info" onclick="showReservationDetails(${reserva.id})" title="Ver detalles">👁️</button>
+
+<button class="btn-small btn-warning" onclick="showEditReservationModal(${reserva.id})" title="Editar fecha/horario">📅</button>
+<button class="btn-small btn-primary" onclick="resendConfirmationEmail(${reserva.id})" title="Reenviar confirmación">📧</button>
+<!-- ✅ AÑADIR TAMBIÉN AQUÍ -->
+<button class="btn-small btn-success" onclick="downloadTicketPDF(${reserva.id}, '${reserva.localizador}')" title="Descargar PDF">📄</button>
+${reserva.estado !== 'cancelada' ?
+    `<button class="btn-small btn-danger" onclick="showCancelReservationModal(${reserva.id}, '${reserva.localizador}')" title="Cancelar reserva">❌</button>` :
+    `<span class="btn-small" style="background: #6c757d; color: white;">CANCELADA</span>`
+}
     </td>
                 </tr>
             `;
@@ -9044,3 +9048,116 @@ function isValidEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
 }
+
+
+/**
+ * Descargar PDF de ticket desde reports
+ */
+function downloadTicketPDF(reservaId, localizador) {
+    console.log('📄 Descargando PDF para reserva:', reservaId, localizador);
+    
+    if (!reservaId || !localizador) {
+        alert('❌ Datos de reserva no válidos');
+        return;
+    }
+
+    // Mostrar indicador de carga
+    showPDFLoadingIndicator();
+
+    const formData = new FormData();
+    formData.append('action', 'generate_ticket_pdf_from_reports');
+    formData.append('reserva_id', reservaId);
+    formData.append('nonce', reservasAjax.nonce);
+
+    fetch(reservasAjax.ajax_url, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hidePDFLoadingIndicator();
+        
+        if (data.success && data.data.pdf_url) {
+            console.log('✅ PDF generado exitosamente');
+            
+            // Descargar automáticamente
+            const link = document.createElement('a');
+            link.href = data.data.pdf_url;
+            link.download = data.data.filename || `billete_${localizador}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Mostrar mensaje de éxito
+            showTemporaryNotification('✅ PDF descargado correctamente', 'success', 3000);
+        } else {
+            console.error('❌ Error generando PDF:', data.data);
+            alert('❌ Error generando el PDF: ' + (data.data || 'Error desconocido'));
+        }
+    })
+    .catch(error => {
+        hidePDFLoadingIndicator();
+        console.error('❌ Error de conexión:', error);
+        alert('❌ Error de conexión al generar el PDF');
+    });
+}
+
+/**
+ * Mostrar indicador de carga para PDF
+ */
+function showPDFLoadingIndicator() {
+    // Crear indicador si no existe
+    if (!document.getElementById('pdf-loading-indicator')) {
+        const indicator = document.createElement('div');
+        indicator.id = 'pdf-loading-indicator';
+        indicator.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #0073aa;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 6px;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        `;
+        
+        indicator.innerHTML = `
+            <div style="width: 20px; height: 20px; border: 2px solid #ffffff; border-top: 2px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <span>Generando PDF...</span>
+        `;
+        
+        // Añadir animación CSS
+        if (!document.getElementById('pdf-spinner-style')) {
+            const style = document.createElement('style');
+            style.id = 'pdf-spinner-style';
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(indicator);
+    } else {
+        document.getElementById('pdf-loading-indicator').style.display = 'flex';
+    }
+}
+
+/**
+ * Ocultar indicador de carga para PDF
+ */
+function hidePDFLoadingIndicator() {
+    const indicator = document.getElementById('pdf-loading-indicator');
+    if (indicator) {
+        indicator.style.display = 'none';
+    }
+}
+
+// Exponer función globalmente
+window.downloadTicketPDF = downloadTicketPDF;

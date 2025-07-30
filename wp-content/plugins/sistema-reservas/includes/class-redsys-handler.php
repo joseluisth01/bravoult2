@@ -4,10 +4,17 @@ require_once __DIR__ . '/redsys-api.php';
 function generar_formulario_redsys($reserva_data) {
     $miObj = new RedsysAPI();
 
-    // ⚠️ IMPORTANTE: Configurar estos valores con tus datos reales de Redsys
-    $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7'; // Tu clave de firma
-    $codigo_comercio = '014591697'; // Tu código FUC
-    $terminal = '001'; // Tu terminal
+    if (is_production_environment()) {
+        // PRODUCCIÓN
+        $clave = 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9'; // ✅ NUEVA CLAVE
+        $codigo_comercio = '014591697';
+        $terminal = '001';
+    } else {
+        // PRUEBAS
+        $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
+        $codigo_comercio = '014591697';
+        $terminal = '001';
+    }
     
     // ✅ CORRECCIÓN: Mejorar el manejo del importe
     error_log("=== DATOS RECIBIDOS PARA REDSYS ===");
@@ -97,7 +104,6 @@ function generar_formulario_redsys($reserva_data) {
     error_log("Parámetros codificados: " . $params);
     error_log("Firma generada: " . $signature);
 
-    // URL del entorno (importante: cambiar según sea producción o pruebas)
     $redsys_url = is_production_environment() ? 
         'https://sis.redsys.es/sis/realizarPago' : 
         'https://sis-t.redsys.es:25443/sis/realizarPago';

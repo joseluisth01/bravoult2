@@ -47,6 +47,9 @@ class ReservasReportsAdmin
     add_action('wp_ajax_debug_agencies_data', array($this, 'debug_agencies_data'));
     add_action('wp_ajax_nopriv_debug_agencies_data', array($this, 'debug_agencies_data'));
 
+    add_action('wp_ajax_generate_ticket_pdf_from_reports', array($this, 'generate_ticket_pdf_from_reports'));
+add_action('wp_ajax_nopriv_generate_ticket_pdf_from_reports', array($this, 'generate_ticket_pdf_from_reports'));
+
     }
 
 /**
@@ -342,6 +345,85 @@ public function get_reservations_report()
     }
 }
 
+/**
+ * Generar PDF de ticket para descarga desde reports
+ */
+public function generate_ticket_pdf_from_reports()
+{
+    if (!wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+        wp_send_json_error('Error de seguridad');
+        return;
+    }
+
+    if (!session_id()) {
+        session_start();
+    }
+
+    if (!isset($_SESSION['reservas_user']) || !in_array($_SESSION['reservas_user']['role'], ['super_admin', 'admin'])) {
+        wp_send_json_error('Sin permisos');
+        return;
+    }
+
+    $reserva_id = intval($_POST['reserva_id']);
+
+    if (!$reserva_id) {
+        wp_send_json_error('ID de reserva no válido');
+        return;
+    }
+
+    try {
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        $table_servicios = $wpdb->prefix . 'reservas_servicios';
+
+        // Obtener datos completos de la reserva
+        $reserva = $wpdb->get_row($wpdb->prepare(
+            "SELECT r.*, s.precio_adulto, s.precio_nino, s.precio_residente 
+             FROM $table_reservas r
+             LEFT JOIN $table_servicios s ON r.servicio_id = s.id
+             WHERE r.id = %d",
+            $reserva_id
+        ));
+
+        if (!$reserva) {
+            wp_send_json_error('Reserva no encontrada');
+            return;
+        }
+
+        // Preparar datos para el PDF
+        $reserva_array = (array) $reserva;
+
+        // Generar PDF
+        if (!class_exists('ReservasPDFGenerator')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-pdf-generator.php';
+        }
+
+        $pdf_generator = new ReservasPDFGenerator();
+        $pdf_path = $pdf_generator->generate_ticket_pdf($reserva_array);
+
+        if (!$pdf_path || !file_exists($pdf_path)) {
+            wp_send_json_error('Error generando el PDF');
+            return;
+        }
+
+        // Crear URL público para el PDF
+        $upload_dir = wp_upload_dir();
+        $pdf_url = str_replace($upload_dir['path'], $upload_dir['url'], $pdf_path);
+
+        // Programar eliminación del archivo después de 1 hora
+        wp_schedule_single_event(time() + 3600, 'delete_temp_pdf', array($pdf_path));
+
+        wp_send_json_success(array(
+            'pdf_url' => $pdf_url,
+            'localizador' => $reserva->localizador,
+            'filename' => 'billete_' . $reserva->localizador . '.pdf'
+        ));
+
+    } catch (Exception $e) {
+        error_log('Error generando PDF desde reports: ' . $e->getMessage());
+        wp_send_json_error('Error interno generando el PDF: ' . $e->getMessage());
+    }
+}
 
 /**
  * Obtener lista de agencias para el filtro
