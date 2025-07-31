@@ -645,9 +645,8 @@ jQuery(document).ready(function ($) {
         }
     };
 
-    // ✅ FUNCIÓN MEJORADA PARA PROCEDER A DETALLES
     window.proceedToDetails = function () {
-        console.log('=== INICIANDO proceedToDetails ===');
+        console.log('=== INICIANDO proceedToDetails CON REDSYS ===');
 
         if (!selectedDate || !selectedServiceId) {
             alert('Error: No hay fecha o servicio seleccionado');
@@ -733,7 +732,7 @@ jQuery(document).ready(function ($) {
 });
 
 function processReservation() {
-    console.log("=== PROCESANDO RESERVA DIRECTAMENTE ===");
+    console.log("=== PROCESANDO RESERVA CON REDSYS ===");
 
     // Verificar checkbox de privacidad
     const checkbox = document.getElementById("privacy-policy");
@@ -787,12 +786,20 @@ function processReservation() {
         return;
     }
 
+    // ✅ AÑADIR DATOS PERSONALES A LA RESERVA
+    reservationData.nombre = nombre;
+    reservationData.apellidos = apellidos;
+    reservationData.email = email;
+    reservationData.telefono = telefono;
+
+    console.log("Datos completos para Redsys:", reservationData);
+
     // Deshabilitar botón y mostrar estado de carga
     const processBtn = document.querySelector(".process-btn");
     if (processBtn) {
         const originalText = processBtn.textContent;
         processBtn.disabled = true;
-        processBtn.textContent = "Procesando...";
+        processBtn.textContent = "Redirigiendo al banco...";
         
         // Función para rehabilitar botón
         window.enableProcessButton = function() {
@@ -801,20 +808,16 @@ function processReservation() {
         };
     }
 
-    // ✅ CAMBIO PRINCIPAL: Enviar directamente a process_reservation
+    // ✅ ENVIAR A REDSYS EN LUGAR DE PROCESAR DIRECTAMENTE
     const requestData = {
-        action: "process_reservation",
+        action: "generar_formulario_pago_redsys",
         nonce: reservasAjax.nonce,
-        nombre: nombre,
-        apellidos: apellidos,
-        email: email,
-        telefono: telefono,
         reservation_data: JSON.stringify(reservationData)
     };
 
-    console.log("Enviando datos directamente a process_reservation:", requestData);
+    console.log("Enviando datos a Redsys:", requestData);
 
-    // Enviar solicitud AJAX
+    // Enviar solicitud AJAX para generar formulario de Redsys
     fetch(reservasAjax.ajax_url, {
         method: "POST",
         headers: {
@@ -838,21 +841,18 @@ function processReservation() {
         if (window.enableProcessButton) window.enableProcessButton();
 
         if (data && data.success) {
-            console.log("✅ Reserva procesada correctamente");
+            console.log("✅ Formulario de Redsys generado correctamente");
             
-            // ✅ REDIRIGIR DIRECTAMENTE A CONFIRMACIÓN
-            const confirmationUrl = data.data.redirect_url || (window.location.origin + '/confirmacion-reserva/');
-            console.log("🎯 Redirigiendo a:", confirmationUrl);
+            // ✅ INSERTAR FORMULARIO Y ENVIARLO AUTOMÁTICAMENTE
+            const formContainer = document.createElement('div');
+            formContainer.innerHTML = data.data;
+            document.body.appendChild(formContainer);
             
-            // Limpiar sessionStorage
-            sessionStorage.removeItem("reservationData");
-            
-            // Redirigir
-            window.location.href = confirmationUrl;
+            console.log("🏦 Redirigiendo a Redsys...");
             
         } else {
-            console.error("❌ Error procesando reserva:", data);
-            const errorMsg = data && data.data ? data.data : "Error procesando la reserva";
+            console.error("❌ Error generando formulario Redsys:", data);
+            const errorMsg = data && data.data ? data.data : "Error generando formulario de pago";
             alert("Error: " + errorMsg);
         }
     })
@@ -862,7 +862,7 @@ function processReservation() {
         // Rehabilitar botón
         if (window.enableProcessButton) window.enableProcessButton();
 
-        let errorMessage = "Error de conexión al procesar la reserva.";
+        let errorMessage = "Error de conexión al generar el formulario de pago.";
         if (error.message.includes('403')) {
             errorMessage += " (Error 403: Acceso denegado)";
         } else if (error.message.includes('404')) {

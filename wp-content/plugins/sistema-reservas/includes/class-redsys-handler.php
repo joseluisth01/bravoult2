@@ -2,25 +2,27 @@
 require_once __DIR__ . '/redsys-api.php';
 
 function generar_formulario_redsys($reserva_data) {
+    error_log('=== INICIANDO GENERACIÓN FORMULARIO REDSYS ===');
+    error_log('Datos recibidos: ' . print_r($reserva_data, true));
+    
     $miObj = new RedsysAPI();
 
+    // ✅ CONFIGURACIÓN ACTUALIZADA PARA PRODUCCIÓN
     if (is_production_environment()) {
-        // PRODUCCIÓN
-        $clave = 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9'; // ✅ NUEVA CLAVE
-        $codigo_comercio = '014591697';
-        $terminal = '001';
+        // DATOS DE PRODUCCIÓN
+        $clave = 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9'; // ✅ TU NUEVA CLAVE DE PRODUCCIÓN
+        $codigo_comercio = '014591697'; // Tu código FUC
+        $terminal = '001'; // Tu terminal
+        error_log('🟢 USANDO CONFIGURACIÓN DE PRODUCCIÓN');
     } else {
-        // PRUEBAS
+        // DATOS DE PRUEBAS (para desarrollo)
         $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
         $codigo_comercio = '014591697';
         $terminal = '001';
+        error_log('🟡 USANDO CONFIGURACIÓN DE PRUEBAS');
     }
     
-    // ✅ CORRECCIÓN: Mejorar el manejo del importe
-    error_log("=== DATOS RECIBIDOS PARA REDSYS ===");
-    error_log("Reserva data completa: " . print_r($reserva_data, true));
-    
-    // Obtener el precio de diferentes formas posibles
+    // ✅ MEJORAR EL MANEJO DEL IMPORTE
     $total_price = null;
     if (isset($reserva_data['total_price'])) {
         $total_price = $reserva_data['total_price'];
@@ -45,7 +47,7 @@ function generar_formulario_redsys($reserva_data) {
     $importe = intval($total_price * 100);
     error_log("Importe en céntimos para Redsys: " . $importe);
     
-    // ✅ CORRECCIÓN: Mejorar generación del número de pedido
+    // ✅ GENERAR NÚMERO DE PEDIDO ÚNICO
     $timestamp = time();
     $random = rand(1000, 9999);
     
@@ -105,8 +107,8 @@ function generar_formulario_redsys($reserva_data) {
     error_log("Firma generada: " . $signature);
 
     $redsys_url = is_production_environment() ? 
-        'https://sis.redsys.es/sis/realizarPago' : 
-        'https://sis-t.redsys.es:25443/sis/realizarPago';
+        'https://sis.redsys.es/sis/realizarPago' :        // ✅ PRODUCCIÓN
+        'https://sis-t.redsys.es:25443/sis/realizarPago'; // PRUEBAS
     
     error_log("URL de Redsys: " . $redsys_url);
 
@@ -128,12 +130,13 @@ function generar_formulario_redsys($reserva_data) {
     // Guardar datos del pedido para verificación posterior
     guardar_datos_pedido($pedido, $reserva_data);
 
+    error_log("✅ Formulario HTML generado correctamente");
     return $html;
 }
 
 function is_production_environment() {
-    // ✅ FORZAR PRODUCCIÓN
-    return false;
+    // ✅ CAMBIAR A TRUE PARA ACTIVAR PRODUCCIÓN
+    return true; // ← CAMBIO AQUÍ: true = PRODUCCIÓN, false = PRUEBAS
 }
 
 function process_successful_payment($order_id, $params) {

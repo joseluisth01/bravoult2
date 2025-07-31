@@ -6,7 +6,7 @@
 require_once __DIR__ . '/redsys-api.php';
 
 function generar_formulario_redsys($reserva_data) {
-        error_log('=== INICIANDO GENERACIÓN FORMULARIO REDSYS ===');
+    error_log('=== INICIANDO GENERACIÓN FORMULARIO REDSYS ===');
     error_log('Datos recibidos: ' . print_r($reserva_data, true));
     
     $miObj = new RedsysAPI();
@@ -15,11 +15,11 @@ function generar_formulario_redsys($reserva_data) {
     if (is_production_environment()) {
         // DATOS DE PRODUCCIÓN
         $clave = 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9'; // ✅ TU NUEVA CLAVE DE PRODUCCIÓN
-        $codigo_comercio = '014591697'; // Tu código FUC (debería ser el mismo)
-        $terminal = '001'; // Tu terminal (debería ser el mismo)
+        $codigo_comercio = '014591697'; // Tu código FUC
+        $terminal = '001'; // Tu terminal
         error_log('🟢 USANDO CONFIGURACIÓN DE PRODUCCIÓN');
     } else {
-        // DATOS DE PRUEBAS (mantener los antiguos para desarrollo)
+        // DATOS DE PRUEBAS (para desarrollo)
         $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
         $codigo_comercio = '014591697';
         $terminal = '001';
@@ -139,8 +139,8 @@ function generar_formulario_redsys($reserva_data) {
 }
 
 function is_production_environment() {
-    // ✅ FORZAR PRODUCCIÓN
-    return false;
+    // ✅ CAMBIAR A TRUE PARA ACTIVAR PRODUCCIÓN
+    return true; // ← CAMBIO AQUÍ: true = PRODUCCIÓN, false = PRUEBAS
 }
 
 function guardar_datos_pedido($order_id, $reserva_data) {

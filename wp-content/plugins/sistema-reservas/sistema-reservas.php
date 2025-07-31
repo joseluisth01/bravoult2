@@ -1518,6 +1518,9 @@ add_action('admin_init', function () {
 });
 
 
+add_action('wp_ajax_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
+add_action('wp_ajax_nopriv_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
+
 function ajax_generar_formulario_pago_redsys()
 {
     error_log('=== FUNCIÓN REDSYS EJECUTADA ===');
@@ -1557,7 +1560,11 @@ function ajax_generar_formulario_pago_redsys()
             return;
         }
 
-        // ✅ CAMBIO: Usar directamente la función desde class-redsys-handler.php
+        // ✅ USAR LA FUNCIÓN DE REDSYS-HELPER.PHP
+        if (!function_exists('generar_formulario_redsys')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/redsys-helper.php';
+        }
+
         error_log('✅ Generando formulario Redsys...');
         $formulario = generar_formulario_redsys($reserva);
 
@@ -1569,10 +1576,6 @@ function ajax_generar_formulario_pago_redsys()
         wp_send_json_error('Error: ' . $e->getMessage());
     }
 }
-
-// ✅ REGISTRAR LA FUNCIÓN AJAX
-// add_action('wp_ajax_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
-// add_action('wp_ajax_nopriv_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
 
 add_action('wp_ajax_reset_super_admin', 'reset_super_admin_credentials');
 
@@ -1629,10 +1632,10 @@ add_action('wp_ajax_reset_super_admin', 'reset_super_admin_credentials');
     exit;
 } */
 
-// add_action('wp_ajax_redsys_notification', 'handle_redsys_notification');
-// add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
+add_action('wp_ajax_redsys_notification', 'handle_redsys_notification');
+add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
 
-/* function handle_redsys_notification() {
+function handle_redsys_notification() {
     error_log('🔁 Recibida notificación de Redsys (MerchantURL)');
     error_log('POST data: ' . print_r($_POST, true));
     error_log('GET data: ' . print_r($_GET, true));
@@ -1698,8 +1701,7 @@ add_action('wp_ajax_reset_super_admin', 'reset_super_admin_credentials');
     }
 
     exit;
-} */
-
+}
 
 // ✅ NUEVA FUNCIÓN: Procesar pago cuando llega por URL GET
 add_action('template_redirect', 'check_redsys_return_url');
