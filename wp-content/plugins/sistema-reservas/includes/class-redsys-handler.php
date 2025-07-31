@@ -99,7 +99,7 @@ function generar_formulario_redsys($reserva_data) {
 }
 
 function is_production_environment() {
-    return false; // PRUEBAS
+    return true; // PRUEBAS
 }
 
 function process_successful_payment($order_id, $params) {

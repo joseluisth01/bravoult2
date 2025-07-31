@@ -127,7 +127,7 @@ function generar_formulario_redsys($reserva_data) {
 
 function is_production_environment() {
     // ✅ CAMBIAR A TRUE PARA ACTIVAR PRODUCCIÓN
-    return false; // ← CAMBIO: false = PRUEBAS, true = PRODUCCIÓN
+    return true; // ← CAMBIO: false = PRUEBAS, true = PRODUCCIÓN
 }
 
 
