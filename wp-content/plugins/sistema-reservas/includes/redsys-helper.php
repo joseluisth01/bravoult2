@@ -126,200 +126,74 @@ function is_production_environment() {
     return false; // ← CAMBIO: false = PRUEBAS, true = PRODUCCIÓN
 }
 
-function guardar_datos_pedido($order_id, $reserva_data) {
-    error_log('=== GUARDANDO DATOS DEL PEDIDO ===');
+
+
+function process_successful_payment($order_id, $redsys_params) {
+    error_log('=== PROCESANDO PAGO EXITOSO ===');
     error_log("Order ID: $order_id");
-    error_log("Datos a guardar: " . print_r($reserva_data, true));
+    error_log('Parámetros Redsys: ' . print_r($redsys_params, true));
+
+    // Verificar si ya existe una reserva con este order_id
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
     
-    // ✅ GUARDAR EN MÚLTIPLES UBICACIONES CON MÁS PERSISTENCIA
-    
-    // 1. Sesión
+    $existing = $wpdb->get_var($wpdb->prepare(
+        "SELECT id FROM $table_reservas WHERE redsys_order_id = %s",
+        $order_id
+    ));
+
+    if ($existing) {
+        error_log("⚠️ Ya existe reserva para order_id: $order_id");
+        return true;
+    }
+
+    // Obtener datos del pedido guardados
     if (!session_id()) {
         session_start();
     }
     
-    if (!isset($_SESSION['pending_orders'])) {
-        $_SESSION['pending_orders'] = array();
-    }
-    
-    $_SESSION['pending_orders'][$order_id] = array(
-        'reservation_data' => $reserva_data,
-        'timestamp' => time(),
-        'status' => 'pending'
-    );
-    
-    // 2. Transients con múltiples claves
-    set_transient('redsys_order_' . $order_id, $reserva_data, 7200); // 2 horas
-    set_transient('latest_pending_order', array(
-        'order_id' => $order_id,
-        'data' => $reserva_data,
-        'timestamp' => time()
-    ), 7200);
-    
-    // 3. Options temporales (más persistente)
-    update_option('temp_order_' . $order_id, $reserva_data, false);
-    update_option('latest_order_data', array(
-        'order_id' => $order_id,
-        'data' => $reserva_data,
-        'timestamp' => time()
-    ), false);
-    
-    // ✅ 4. NUEVO: Guardar en base de datos como respaldo
-    global $wpdb;
-    $table_config = $wpdb->prefix . 'reservas_configuration';
-    
-    $wpdb->replace(
-        $table_config,
-        array(
-            'config_key' => 'pending_order_' . $order_id,
-            'config_value' => json_encode($reserva_data),
-            'config_group' => 'temp_orders',
-            'description' => 'Datos temporales de pedido pendiente'
-        )
-    );
-    
-    error_log("✅ Datos del pedido $order_id guardados en múltiples ubicaciones");
-}
-
-function process_successful_payment($order_id, $params) {
-    error_log('=== PROCESANDO PAGO EXITOSO ===');
-    error_log("Order ID: $order_id");
-    error_log("Params: " . print_r($params, true));
-    
-    // ✅ MEJORAR RECUPERACIÓN DE DATOS - MÚLTIPLES MÉTODOS
-    $reservation_data = null;
-    
-    // Método 1: Transient
-    $reservation_data = get_transient('redsys_order_' . $order_id);
-    error_log("Datos desde transient: " . ($reservation_data ? 'ENCONTRADOS' : 'NO ENCONTRADOS'));
-    
-    // Método 2: Session
-    if (!$reservation_data) {
-        if (!session_id()) {
-            session_start();
-        }
-        if (isset($_SESSION['pending_orders'][$order_id])) {
-            $reservation_data = $_SESSION['pending_orders'][$order_id]['reservation_data'];
-            error_log("Datos desde sesión: ENCONTRADOS");
-        }
-    }
-    
-    // Método 3: Option temporal
-    if (!$reservation_data) {
-        $reservation_data = get_option('temp_order_' . $order_id);
-        error_log("Datos desde option: " . ($reservation_data ? 'ENCONTRADOS' : 'NO ENCONTRADOS'));
-    }
-    
-    // ✅ Método 4: NUEVO - Desde base de datos
-    if (!$reservation_data) {
-        global $wpdb;
-        $table_config = $wpdb->prefix . 'reservas_configuration';
-        
-        $config_value = $wpdb->get_var($wpdb->prepare(
-            "SELECT config_value FROM $table_config WHERE config_key = %s",
-            'pending_order_' . $order_id
-        ));
-        
-        if ($config_value) {
-            $reservation_data = json_decode($config_value, true);
-            error_log("Datos desde BD: ENCONTRADOS");
-        } else {
-            error_log("Datos desde BD: NO ENCONTRADOS");
-        }
-    }
-    
-    // ✅ Método 5: ÚLTIMO RECURSO - Buscar el más reciente
-    if (!$reservation_data) {
-        $latest = get_option('latest_order_data');
-        if ($latest && (time() - $latest['timestamp']) < 3600) { // Si es de la última hora
-            $reservation_data = $latest['data'];
-            error_log("Datos desde latest_order_data: ENCONTRADOS");
-        }
-    }
+    $reservation_data = $_SESSION['pending_orders'][$order_id] ?? null;
     
     if (!$reservation_data) {
-        error_log('❌ CRÍTICO: No se encontraron datos de reserva para pedido: ' . $order_id);
+        error_log("❌ No se encontraron datos para order_id: $order_id");
         return false;
     }
 
-    error_log('✅ Datos de reserva recuperados: ' . print_r($reservation_data, true));
-
     try {
-        // ✅ USAR EL PROCESADOR EXISTENTE PERO CON DATOS CORRECTOS
+        // Procesar la reserva usando la clase existente
         if (!class_exists('ReservasProcessor')) {
             require_once RESERVAS_PLUGIN_PATH . 'includes/class-reservas-processor.php';
         }
 
         $processor = new ReservasProcessor();
         
-        // ✅ PREPARAR DATOS CORRECTAMENTE PARA EL PROCESADOR
-        $processed_data = array(
-            'nombre' => $reservation_data['nombre'] ?? '',
-            'apellidos' => $reservation_data['apellidos'] ?? '',
-            'email' => $reservation_data['email'] ?? '',
-            'telefono' => $reservation_data['telefono'] ?? '',
+        // Preparar datos para el procesador
+        $payment_data = array(
+            'order_id' => $order_id,
+            'nombre' => $reservation_data['nombre'],
+            'apellidos' => $reservation_data['apellidos'],
+            'email' => $reservation_data['email'],
+            'telefono' => $reservation_data['telefono'],
             'reservation_data' => json_encode($reservation_data),
-            'metodo_pago' => 'redsys',
-            'transaction_id' => $params['Ds_AuthorisationCode'] ?? '',
-            'order_id' => $order_id
+            'metodo_pago' => 'redsys'
         );
 
-        error_log('✅ Datos preparados para procesador: ' . print_r($processed_data, true));
+        $result = $processor->process_reservation_payment($payment_data);
 
-        // ✅ PROCESAR LA RESERVA
-        $result = $processor->process_reservation_payment($processed_data);
-        
         if ($result['success']) {
-            error_log('✅ Reserva procesada exitosamente: ' . $result['data']['localizador']);
-            
-            // ✅ GUARDAR MÚLTIPLES COPIAS DE LOS DATOS PARA LA CONFIRMACIÓN
-            if (!session_id()) {
-                session_start();
-            }
-            $_SESSION['confirmed_reservation'] = $result['data'];
-            
-            // Guardar también en transients con múltiples claves
-            set_transient('confirmed_reservation_' . $order_id, $result['data'], 7200);
-            set_transient('latest_confirmed_reservation', $result['data'], 7200);
-            set_transient('confirmed_by_localizador_' . $result['data']['localizador'], $result['data'], 7200);
-            
-            // Options temporales
-            update_option('temp_confirmed_' . $order_id, $result['data'], false);
-            update_option('latest_confirmed_reservation', $result['data'], false);
-            
-            // ✅ GUARDAR TAMBIÉN EN BD
-            global $wpdb;
-            $table_config = $wpdb->prefix . 'reservas_configuration';
-            
-            $wpdb->replace(
-                $table_config,
-                array(
-                    'config_key' => 'confirmed_order_' . $order_id,
-                    'config_value' => json_encode($result['data']),
-                    'config_group' => 'confirmed_orders',
-                    'description' => 'Datos de pedido confirmado'
-                )
-            );
-            
-            error_log('✅ Datos de confirmación guardados en múltiples ubicaciones');
+            error_log("✅ Reserva procesada exitosamente: " . $result['data']['localizador']);
             
             // Limpiar datos temporales
-            delete_transient('redsys_order_' . $order_id);
-            delete_option('temp_order_' . $order_id);
-            $wpdb->delete($table_config, array('config_key' => 'pending_order_' . $order_id));
-            
-            if (isset($_SESSION['pending_orders'][$order_id])) {
-                unset($_SESSION['pending_orders'][$order_id]);
-            }
+            unset($_SESSION['pending_orders'][$order_id]);
             
             return true;
         } else {
-            error_log('❌ Error procesando reserva: ' . $result['message']);
+            error_log("❌ Error procesando reserva: " . $result['message']);
             return false;
         }
-        
+
     } catch (Exception $e) {
-        error_log('❌ Excepción procesando pago exitoso: ' . $e->getMessage());
+        error_log("❌ Excepción procesando pago: " . $e->getMessage());
         return false;
     }
 }

@@ -1518,177 +1518,168 @@ add_action('admin_init', function () {
 });
 
 
-add_action('wp_ajax_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
-add_action('wp_ajax_nopriv_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
 
 function ajax_generar_formulario_pago_redsys()
 {
     error_log('=== FUNCIÓN REDSYS EJECUTADA ===');
 
     try {
-        // ... código de validación existente ...
-
-        if (!function_exists('generar_formulario_redsys')) {
-            require_once RESERVAS_PLUGIN_PATH . 'includes/redsys-helper.php';
+        // Verificar nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+            wp_send_json_error('Error de seguridad');
+            return;
         }
 
-        // ✅ GENERAR DATOS PARA REDIRECCIÓN MANUAL
+        // Decodificar datos de reserva
+        $reservation_data_json = stripslashes($_POST['reservation_data']);
+        $reserva = json_decode($reservation_data_json, true);
+
+        if (!$reserva) {
+            wp_send_json_error('Datos de reserva inválidos');
+            return;
+        }
+
+        error_log('Datos recibidos para Redsys: ' . print_r($reserva, true));
+
+        // Cargar API de Redsys
+        if (!class_exists('RedsysAPI')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/redsys-api.php';
+        }
+
         $miObj = new RedsysAPI();
-        
-        // Configuración (igual que antes)
+
+        // ✅ CONFIGURACIÓN DE PRUEBAS
         $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
-        $codigo_comercio = '999008881';
+        $codigo_comercio = '014591697';
         $terminal = '001';
-        
+
+        // Procesar precio
         $total_price = str_replace(['€', ' ', ','], ['', '', '.'], $reserva['total_price']);
         $total_price = floatval($total_price);
-        $importe = intval($total_price * 100);
-        
+        $importe = intval($total_price * 100); // Convertir a céntimos
+
+        // Generar número de pedido único
         $pedido = date('ymdHis') . rand(100, 999);
-        
+
+        error_log("Configurando pago - Importe: $importe céntimos, Pedido: $pedido");
+
+        // Configurar parámetros de Redsys
         $miObj->setParameter("DS_MERCHANT_AMOUNT", $importe);
         $miObj->setParameter("DS_MERCHANT_ORDER", $pedido);
         $miObj->setParameter("DS_MERCHANT_MERCHANTCODE", $codigo_comercio);
-        $miObj->setParameter("DS_MERCHANT_CURRENCY", "978");
-        $miObj->setParameter("DS_MERCHANT_TRANSACTIONTYPE", "0");
+        $miObj->setParameter("DS_MERCHANT_CURRENCY", "978"); // EUR
+        $miObj->setParameter("DS_MERCHANT_TRANSACTIONTYPE", "0"); // Autorización
         $miObj->setParameter("DS_MERCHANT_TERMINAL", $terminal);
-        
+
+        // URLs de respuesta
         $base_url = home_url();
         $miObj->setParameter("DS_MERCHANT_MERCHANTURL", $base_url . '/wp-admin/admin-ajax.php?action=redsys_notification');
         $miObj->setParameter("DS_MERCHANT_URLOK", $base_url . '/confirmacion-reserva/?status=ok&order=' . $pedido);
         $miObj->setParameter("DS_MERCHANT_URLKO", $base_url . '/error-pago/?status=ko&order=' . $pedido);
-        
+
+        // Generar parámetros y firma
         $params = $miObj->createMerchantParameters();
         $signature = $miObj->createMerchantSignature($clave);
-        
-        // ✅ GUARDAR EN SESIÓN Y DEVOLVER URL DE REDIRECCIÓN
-        if (!session_id()) {
-            session_start();
-        }
-        
-        $_SESSION['redsys_redirect_data'] = array(
-            'url' => 'https://sis-t.redsys.es:25443/sis/realizarPago',
-            'params' => $params,
-            'signature' => $signature,
-            'version' => 'HMAC_SHA256_V1',
-            'order' => $pedido
-        );
-        
+
+        // Guardar datos del pedido para procesamiento posterior
         guardar_datos_pedido($pedido, $reserva);
+
+        // ✅ URL DEL TPV DE PRUEBAS
+        $redsys_url = 'https://sis-t.redsys.es:25443/sis/realizarPago';
+
+        // Generar formulario HTML
+        $formulario_html = '
+        <div id="redsys-overlay" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        ">
+            <div style="
+                background: white;
+                padding: 40px;
+                border-radius: 15px;
+                text-align: center;
+                max-width: 400px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            ">
+                <div style="font-size: 48px; margin-bottom: 20px;">🏦</div>
+                <h3 style="margin: 0 0 15px 0; color: #333;">Redirigiendo al banco...</h3>
+                <p style="color: #666; margin: 0 0 20px 0;">
+                    Por favor, espere mientras lo conectamos con la pasarela de pago segura.
+                </p>
+                <div style="margin: 20px 0;">
+                    <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #0073aa; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+                </div>
+                <p style="font-size: 12px; color: #999; margin: 15px 0 0 0;">
+                    Si no es redirigido automáticamente, haga clic en "Continuar"
+                </p>
+                <button onclick="document.getElementById(\'formulario_redsys\').submit();" style="
+                    background: #0073aa;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    margin-top: 10px;
+                ">Continuar al pago</button>
+            </div>
+        </div>
         
-        // Devolver URL de redirección en lugar del formulario
-        wp_send_json_success(array(
-            'redirect_url' => home_url('/pago-redsys/'), // Crear esta página con el shortcode [redsys_redirect]
-            'method' => 'redirect'
-        ));
+        <form id="formulario_redsys" action="' . $redsys_url . '" method="POST" style="display: none;">
+            <input type="hidden" name="Ds_SignatureVersion" value="HMAC_SHA256_V1">
+            <input type="hidden" name="Ds_MerchantParameters" value="' . $params . '">
+            <input type="hidden" name="Ds_Signature" value="' . $signature . '">
+        </form>
+        
+        <style>
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        </style>
+        
+        <script>
+        console.log("🏦 Formulario de Redsys generado");
+        console.log("Pedido: ' . $pedido . '");
+        console.log("Importe: ' . $importe . ' céntimos");
+        
+        // Auto-enviar después de 2 segundos
+        setTimeout(function() {
+            console.log("Auto-enviando formulario de Redsys...");
+            document.getElementById("formulario_redsys").submit();
+        }, 2000);
+        </script>';
+
+        error_log("✅ Formulario Redsys generado para pedido: $pedido");
+
+        wp_send_json_success($formulario_html);
 
     } catch (Exception $e) {
-        error_log('❌ Excepción: ' . $e->getMessage());
+        error_log('❌ Excepción en Redsys: ' . $e->getMessage());
         wp_send_json_error('Error: ' . $e->getMessage());
     }
 }
 
-add_action('wp_ajax_reset_super_admin', 'reset_super_admin_credentials');
-
-// ✅ SHORTCODE PARA PÁGINA DE REDIRECCIÓN MANUAL
-add_shortcode('redsys_redirect', 'redsys_redirect_shortcode');
-
-function redsys_redirect_shortcode() {
-    // Solo mostrar si hay datos de redirección en la sesión
+// ✅ FUNCIÓN PARA GUARDAR DATOS DEL PEDIDO
+function guardar_datos_pedido($order_id, $reservation_data) {
+    // Guardar en tabla temporal o en sesión para procesar después del pago
     if (!session_id()) {
         session_start();
     }
     
-    if (!isset($_SESSION['redsys_redirect_data'])) {
-        return '<p>No hay datos de redirección disponibles.</p>';
-    }
+    $_SESSION['pending_orders'][$order_id] = $reservation_data;
     
-    $redirect_data = $_SESSION['redsys_redirect_data'];
-    unset($_SESSION['redsys_redirect_data']); // Limpiar después de usar
-    
-    ob_start();
-    ?>
-    <div style="text-align: center; padding: 50px;">
-        <h2>Redirigiendo al banco...</h2>
-        <div style="margin: 30px 0;">
-            <div style="font-size: 48px;">⏳</div>
-            <p>Por favor, espere mientras lo redirigimos a la pasarela de pago segura.</p>
-            <p><em>Si no es redirigido automáticamente, haga clic en "Continuar"</em></p>
-        </div>
-        
-        <form id="redsys_form" action="<?php echo $redirect_data['url']; ?>" method="POST">
-            <input type="hidden" name="Ds_SignatureVersion" value="<?php echo $redirect_data['version']; ?>">
-            <input type="hidden" name="Ds_MerchantParameters" value="<?php echo $redirect_data['params']; ?>">
-            <input type="hidden" name="Ds_Signature" value="<?php echo $redirect_data['signature']; ?>">
-            <button type="submit" style="background: #0073aa; color: white; padding: 15px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
-                Continuar al pago
-            </button>
-        </form>
-    </div>
-    
-    <script>
-        // Auto-enviar después de 2 segundos
-        setTimeout(function() {
-            console.log("Auto-enviando formulario de Redsys...");
-            document.getElementById('redsys_form').submit();
-        }, 2000);
-    </script>
-    <?php
-    return ob_get_clean();
+    error_log("✅ Datos del pedido $order_id guardados para procesamiento posterior");
 }
 
-/* function reset_super_admin_credentials() {
-    // Solo permitir en desarrollo o con parámetro específico
-    if (!isset($_GET['reset_admin']) || $_GET['reset_admin'] !== 'confirm') {
-        wp_die('Acción no autorizada');
-    }
 
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'reservas_users';
-
-    // Actualizar o crear el super admin
-    $existing = $wpdb->get_var($wpdb->prepare(
-        "SELECT id FROM $table_name WHERE role = %s LIMIT 1",
-        'super_admin'
-    ));
-
-    if ($existing) {
-        // Actualizar existente
-        $result = $wpdb->update(
-            $table_name,
-            array(
-                'username' => 'administrador',
-                'password' => password_hash('busmedina', PASSWORD_DEFAULT),
-                'status' => 'active'
-            ),
-            array('id' => $existing)
-        );
-    } else {
-        // Crear nuevo
-        $result = $wpdb->insert(
-            $table_name,
-            array(
-                'username' => 'administrador',
-                'email' => 'admin@' . parse_url(home_url(), PHP_URL_HOST),
-                'password' => password_hash('busmedina', PASSWORD_DEFAULT),
-                'role' => 'super_admin',
-                'status' => 'active',
-                'created_at' => current_time('mysql')
-            )
-        );
-    }
-
-    if ($result !== false) {
-        echo "✅ Credenciales de super admin actualizadas correctamente<br>";
-        echo "Usuario: administrador<br>";
-        echo "Contraseña: busmedina<br>";
-        echo "<a href='" . home_url('/reservas-login/') . "'>Ir al login</a>";
-    } else {
-        echo "❌ Error actualizando credenciales: " . $wpdb->last_error;
-    }
-
-    exit;
-} */
 
 add_action('wp_ajax_redsys_notification', 'handle_redsys_notification');
 add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');

@@ -260,25 +260,3 @@ function get_reservation_data_for_confirmation() {
     return null;
 }
 
-function guardar_datos_pedido($order_id, $reserva_data) {
-    // Guardar en sesión para verificar después
-    if (!session_id()) {
-        session_start();
-    }
-    
-    // Guardar en sesión
-    if (!isset($_SESSION['pending_orders'])) {
-        $_SESSION['pending_orders'] = array();
-    }
-    
-    $_SESSION['pending_orders'][$order_id] = array(
-        'reservation_data' => $reserva_data,
-        'timestamp' => time(),
-        'status' => 'pending'
-    );
-    
-    // También guardar en transient de WordPress por seguridad
-    set_transient('redsys_order_' . $order_id, $reserva_data, 3600); // 1 hora
-    
-    error_log("✅ Datos del pedido $order_id guardados para verificación posterior");
-}
