@@ -1066,54 +1066,68 @@ function confirmacion_reserva_shortcode()
         }
 
         function loadReservationData() {
-            console.log('=== INTENTANDO CARGAR DATOS DE RESERVA ===');
-            
-            // ✅ OBTENER LOCALIZADOR DE LA URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const localizador = urlParams.get('localizador');
-            
-            console.log('Localizador desde URL:', localizador);
-            
-            if (!localizador) {
-                console.error('❌ No se encontró localizador en la URL');
-                showErrorInfo();
-                enableActionButtons();
-                return;
-            }
-            
-            // ✅ SOLICITAR DATOS POR LOCALIZADOR
-            fetch(ajaxurl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    action: 'get_confirmed_reservation_data',
-                    localizador: localizador,
-                    nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('📡 Respuesta del servidor:', data);
-                
-                if (data.success && data.data) {
-                    reservationData = data.data;
-                    console.log('✅ Datos de reserva cargados correctamente');
-                    updateArrivalInfo();
-                    enableActionButtons();
-                } else {
-                    console.error('❌ Error del servidor:', data.data || 'Error desconocido');
-                    showErrorInfo();
-                    enableActionButtons();
-                }
-            })
-            .catch(error => {
-                console.error('❌ Error de conexión:', error);
-                showErrorInfo();
-                enableActionButtons();
-            });
+    console.log('=== INTENTANDO CARGAR DATOS DE RESERVA ===');
+    
+    // ✅ OBTENER PARÁMETROS DE LA URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const localizador = urlParams.get('localizador');
+    const order_id = urlParams.get('order');
+    
+    console.log('Localizador desde URL:', localizador);
+    console.log('Order ID desde URL:', order_id);
+    
+    // ✅ BUSCAR POR LOCALIZADOR O POR ORDER_ID
+    if (!localizador && !order_id) {
+        console.error('❌ No se encontró localizador ni order_id en la URL');
+        showErrorInfo();
+        enableActionButtons();
+        return;
+    }
+    
+    // ✅ PREPARAR DATOS PARA LA BÚSQUEDA
+    const searchData = {
+        action: 'get_confirmed_reservation_data',
+        nonce: '<?php echo wp_create_nonce('reservas_nonce'); ?>'
+    };
+    
+    // Añadir el parámetro disponible
+    if (localizador) {
+        searchData.localizador = localizador;
+        console.log('🔍 Buscando por localizador:', localizador);
+    } else if (order_id) {
+        searchData.order_id = order_id;
+        console.log('🔍 Buscando por order_id:', order_id);
+    }
+    
+    // ✅ SOLICITAR DATOS
+    fetch(ajaxurl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(searchData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('📡 Respuesta del servidor:', data);
+        
+        if (data.success && data.data) {
+            reservationData = data.data;
+            console.log('✅ Datos de reserva cargados correctamente');
+            updateArrivalInfo();
+            enableActionButtons();
+        } else {
+            console.error('❌ Error del servidor:', data.data || 'Error desconocido');
+            showErrorInfo();
+            enableActionButtons();
         }
+    })
+    .catch(error => {
+        console.error('❌ Error de conexión:', error);
+        showErrorInfo();
+        enableActionButtons();
+    });
+}
 
         function updateArrivalInfo() {
             if (!reservationData || !reservationData.detalles) {
@@ -1567,6 +1581,49 @@ function ajax_generar_formulario_pago_redsys() {
 add_action('wp_ajax_redsys_notification', 'handle_redsys_notification');
 add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
 
+
+add_action('wp_ajax_debug_redsys_flow', 'debug_redsys_flow');
+add_action('wp_ajax_nopriv_debug_redsys_flow', 'debug_redsys_flow');
+
+function debug_redsys_flow() {
+    if (!session_id()) {
+        session_start();
+    }
+    
+    $order_id = $_POST['order_id'] ?? '';
+    
+    error_log('=== DEBUG FLUJO REDSYS ===');
+    error_log('Order ID recibido: ' . $order_id);
+    error_log('Session ID: ' . session_id());
+    error_log('Session data: ' . print_r($_SESSION, true));
+    
+    // Verificar si hay datos en transient
+    if ($order_id) {
+        $transient_data = get_transient('redsys_order_' . $order_id);
+        error_log('Datos en transient: ' . print_r($transient_data, true));
+    }
+    
+    // Verificar últimas reservas
+    global $wpdb;
+    $table_reservas = $wpdb->prefix . 'reservas_reservas';
+    
+    $recent_reservas = $wpdb->get_results(
+        "SELECT * FROM $table_reservas 
+         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
+         ORDER BY created_at DESC 
+         LIMIT 5"
+    );
+    
+    error_log('Reservas recientes: ' . print_r($recent_reservas, true));
+    
+    wp_send_json_success(array(
+        'order_id' => $order_id,
+        'session_id' => session_id(),
+        'session_data' => $_SESSION,
+        'transient_data' => $transient_data ?? null,
+        'recent_reservas' => $recent_reservas
+    ));
+}
 function handle_redsys_notification() {
     error_log('🔁 Recibida notificación de Redsys (MerchantURL)');
     error_log('POST data: ' . print_r($_POST, true));
@@ -1615,9 +1672,9 @@ function handle_redsys_notification() {
 
     error_log('✅ Pago exitoso, procesando reserva...');
 
-    // ✅ CARGAR FUNCIÓN DE PROCESAMIENTO
+    // ✅ CARGAR FUNCIÓN DE PROCESAMIENTO CORREGIDA
     if (!function_exists('process_successful_payment')) {
-        require_once RESERVAS_PLUGIN_PATH . 'includes/redsys-helper.php';
+        require_once RESERVAS_PLUGIN_PATH . 'includes/class-redsys-handler.php';
     }
 
     $ok = process_successful_payment($order_id, $decoded);
@@ -1760,31 +1817,51 @@ function ajax_get_confirmed_reservation_data() {
         return;
     }
 
-    // ✅ OBTENER LOCALIZADOR DE LOS PARÁMETROS
+    // ✅ OBTENER PARÁMETROS DE BÚSQUEDA
     $localizador = sanitize_text_field($_POST['localizador'] ?? '');
+    $order_id = sanitize_text_field($_POST['order_id'] ?? '');
     
-    error_log('=== BUSCANDO DATOS DE CONFIRMACIÓN POR LOCALIZADOR ===');
+    error_log('=== BUSCANDO DATOS DE CONFIRMACIÓN ===');
     error_log('Localizador recibido: ' . $localizador);
+    error_log('Order ID recibido: ' . $order_id);
     
-    // ✅ VERIFICAR QUE TENEMOS LOCALIZADOR
-    if (empty($localizador)) {
-        error_log('❌ No se proporcionó localizador');
-        wp_send_json_error('No se proporcionó localizador válido');
+    // ✅ VERIFICAR QUE TENEMOS AL MENOS UN PARÁMETRO
+    if (empty($localizador) && empty($order_id)) {
+        error_log('❌ No se proporcionó localizador ni order_id');
+        wp_send_json_error('No se proporcionó localizador ni order_id válido');
         return;
     }
     
     global $wpdb;
     $table_reservas = $wpdb->prefix . 'reservas_reservas';
     
-    // ✅ BUSCAR ÚNICAMENTE POR LOCALIZADOR
-    $reserva = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM $table_reservas WHERE localizador = %s AND estado = 'confirmada' LIMIT 1",
-        $localizador
-    ));
+    $reserva = null;
+    
+    // ✅ BUSCAR POR LOCALIZADOR PRIMERO
+    if (!empty($localizador)) {
+        $reserva = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_reservas WHERE localizador = %s AND estado = 'confirmada' LIMIT 1",
+            $localizador
+        ));
+        
+        if ($reserva) {
+            error_log('✅ Reserva encontrada por localizador: ' . $reserva->localizador);
+        }
+    }
+    
+    // ✅ SI NO SE ENCUENTRA, BUSCAR POR ORDER_ID
+    if (!$reserva && !empty($order_id)) {
+        $reserva = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_reservas WHERE redsys_order_id = %s AND estado = 'confirmada' LIMIT 1",
+            $order_id
+        ));
+        
+        if ($reserva) {
+            error_log('✅ Reserva encontrada por order_id: ' . $reserva->localizador . ' (Order: ' . $order_id . ')');
+        }
+    }
     
     if ($reserva) {
-        error_log('✅ Reserva encontrada por localizador: ' . $reserva->localizador);
-        
         $data = array(
             'localizador' => $reserva->localizador,
             'reserva_id' => $reserva->id,
@@ -1800,8 +1877,8 @@ function ajax_get_confirmed_reservation_data() {
         return;
     }
     
-    error_log('❌ No se encontró reserva con localizador: ' . $localizador);
-    wp_send_json_error('No se encontró reserva con ese localizador');
+    error_log('❌ No se encontró reserva con localizador: ' . $localizador . ' ni order_id: ' . $order_id);
+    wp_send_json_error('No se encontró reserva con esos datos');
 }
 
 add_action('wp_ajax_get_most_recent_reservation', 'ajax_get_most_recent_reservation');

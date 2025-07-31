@@ -55,6 +55,8 @@ function generar_formulario_redsys($reserva_data) {
     
     $base_url = home_url();
     $miObj->setParameter("DS_MERCHANT_MERCHANTURL", $base_url . '/wp-admin/admin-ajax.php?action=redsys_notification');
+    
+    // ✅ CAMBIAR URLS PARA INCLUIR ORDER_ID (ya que aún no tenemos localizador)
     $miObj->setParameter("DS_MERCHANT_URLOK", $base_url . '/confirmacion-reserva/?status=ok&order=' . $pedido);
     $miObj->setParameter("DS_MERCHANT_URLKO", $base_url . '/error-pago/?status=ko&order=' . $pedido);
     
@@ -145,14 +147,14 @@ function process_successful_payment($order_id, $params) {
             return true; // No es error, ya está procesada
         }
 
-        // Procesar la reserva usando tu sistema existente
+        // ✅ PROCESAR LA RESERVA USANDO EL SISTEMA EXISTENTE
         if (!class_exists('ReservasProcessor')) {
             require_once RESERVAS_PLUGIN_PATH . 'includes/class-reservas-processor.php';
         }
 
         $processor = new ReservasProcessor();
         
-        // Preparar datos para el procesador
+        // ✅ PREPARAR DATOS CORRECTAMENTE PARA EL PROCESADOR
         $processed_data = array(
             'nombre' => $reservation_data['nombre'] ?? '',
             'apellidos' => $reservation_data['apellidos'] ?? '',
@@ -164,34 +166,30 @@ function process_successful_payment($order_id, $params) {
             'order_id' => $order_id
         );
 
-        // Procesar la reserva usando el método existente
+        error_log('✅ Datos preparados para el procesador: ' . print_r($processed_data, true));
+
+        // ✅ PROCESAR LA RESERVA
         $result = $processor->process_reservation_payment($processed_data);
         
         if ($result['success']) {
             error_log('✅ Reserva procesada exitosamente: ' . $result['data']['localizador']);
             
-            // ✅ GUARDAR DATOS PARA LA PÁGINA DE CONFIRMACIÓN DE MÚLTIPLES FORMAS
+            // ✅ GUARDAR DATOS PARA LA PÁGINA DE CONFIRMACIÓN
             if (!session_id()) {
                 session_start();
             }
             
-            // 1. Guardar en sesión
+            // Guardar de múltiples formas para asegurar disponibilidad
             $_SESSION['confirmed_reservation'] = $result['data'];
-            
-            // 2. Guardar en transient con el order_id
             set_transient('confirmed_reservation_' . $order_id, $result['data'], 3600);
-            
-            // 3. Guardar con el localizador también
             set_transient('confirmed_reservation_loc_' . $result['data']['localizador'], $result['data'], 3600);
-            
-            // 4. Guardar como última reserva confirmada
-            set_transient('latest_confirmed_reservation', $result['data'], 1800); // 30 minutos
-            
-            // 5. Guardar en BD temporal para mayor seguridad
             update_option('temp_reservation_' . $order_id, $result['data'], false);
             update_option('temp_reservation_loc_' . $result['data']['localizador'], $result['data'], false);
             
-            error_log('✅ Datos de confirmación guardados en múltiples ubicaciones');
+            // ✅ NUEVO: GUARDAR RELACIÓN ORDER_ID -> LOCALIZADOR PARA REDIRECCIÓN
+            set_transient('order_to_localizador_' . $order_id, $result['data']['localizador'], 3600);
+            
+            error_log('✅ Datos de confirmación guardados');
             error_log('- Localizador: ' . $result['data']['localizador']);
             error_log('- Order ID: ' . $order_id);
             
