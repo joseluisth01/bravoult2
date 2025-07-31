@@ -18,122 +18,102 @@ class ReservasProcessor
     /**
      * Procesar una nueva reserva - CON EMAILS
      */
-    public function process_reservation()
-    {
-        // Limpiar cualquier output buffer que pueda interferir
-        if (ob_get_level()) {
-            ob_clean();
-        }
-
-        // Headers para asegurar JSON correcto
-        header('Content-Type: application/json');
-
-        try {
-            error_log('=== INICIANDO PROCESS_RESERVATION CON EMAILS ===');
-
-            // Verificar nonce
-            if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
-                wp_send_json_error('Error de seguridad');
-                return;
-            }
-
-            // Validar y sanitizar datos del formulario
-            $datos_personales = $this->validar_datos_personales();
-            if (!$datos_personales['valido']) {
-                wp_send_json_error($datos_personales['error']);
-                return;
-            }
-
-            // Validar y sanitizar datos de la reserva
-            $datos_reserva = $this->validar_datos_reserva();
-            if (!$datos_reserva['valido']) {
-                wp_send_json_error($datos_reserva['error']);
-                return;
-            }
-
-            // Verificar disponibilidad del servicio
-            $servicio = $this->verificar_disponibilidad($datos_reserva['datos']['service_id'], $datos_reserva['datos']['total_personas']);
-            if (!$servicio['disponible']) {
-                wp_send_json_error($servicio['error']);
-                return;
-            }
-
-            // Recalcular precios
-            $calculo_precio = $this->recalcular_precio($datos_reserva['datos']);
-            if (!$calculo_precio['valido']) {
-                wp_send_json_error($calculo_precio['error']);
-                return;
-            }
-
-            // ✅ CREAR LA RESERVA DIRECTAMENTE Y REDIRIGIR
-            $resultado_reserva = $this->crear_reserva(
-                $datos_personales['datos'],
-                $datos_reserva['datos'],
-                $calculo_precio['precio']
-            );
-
-            if (!$resultado_reserva['exito']) {
-                wp_send_json_error($resultado_reserva['error']);
-                return;
-            }
-
-            // Actualizar plazas disponibles
-            $actualizacion = $this->actualizar_plazas_disponibles(
-                $datos_reserva['datos']['service_id'],
-                $datos_reserva['datos']['total_personas']
-            );
-
-            if (!$actualizacion['exito']) {
-                $this->eliminar_reserva($resultado_reserva['reserva_id']);
-                wp_send_json_error('Error actualizando disponibilidad. Reserva cancelada.');
-                return;
-            }
-
-            // ✅ ENVIAR EMAILS DE CONFIRMACIÓN
-            $this->send_confirmation_emails($resultado_reserva['reserva_id']);
-
-            // ✅ GUARDAR DATOS PARA LA PÁGINA DE CONFIRMACIÓN
-            if (!session_id()) {
-                session_start();
-            }
-
-            $confirmation_data = array(
-                'localizador' => $resultado_reserva['localizador'],
-                'reserva_id' => $resultado_reserva['reserva_id'],
-                'detalles' => array(
-                    'fecha' => $datos_reserva['datos']['fecha'],
-                    'hora' => $datos_reserva['datos']['hora_ida'],
-                    'personas' => $datos_reserva['datos']['total_personas'],
-                    'precio_final' => $calculo_precio['precio']['precio_final']
-                )
-            );
-
-            $_SESSION['confirmed_reservation'] = $confirmation_data;
-
-            // Guardar también en transients
-            set_transient('confirmed_reservation_' . $resultado_reserva['localizador'], $confirmation_data, 3600);
-            set_transient('latest_confirmed_reservation', $confirmation_data, 1800);
-
-            $response_data = array(
-    'mensaje' => 'Reserva procesada correctamente',
-    'redirect_url' => home_url('/confirmacion-reserva/'),
-    'localizador' => $resultado_reserva['localizador'],
-    'reserva_id' => $resultado_reserva['reserva_id'],
-    'detalles' => array(
-        'fecha' => $datos_reserva['datos']['fecha'],
-        'hora' => $datos_reserva['datos']['hora_ida'],
-        'personas' => $datos_reserva['datos']['total_personas'],
-        'precio_final' => $calculo_precio['precio']['precio_final']
-    )
-);
-
-error_log('SUCCESS: Reserva completada directamente, redirigiendo a confirmación');
-wp_send_json_success($response_data);
-        } catch (Exception $e) {
-            error_log('EXCEPTION: ' . $e->getMessage());
-            wp_send_json_error('Error interno del servidor: ' . $e->getMessage());
-        }
+public function process_reservation()
+{
+    // Limpiar cualquier output buffer que pueda interferir
+    if (ob_get_level()) {
+        ob_clean();
     }
+
+    // Headers para asegurar JSON correcto
+    header('Content-Type: application/json');
+
+    try {
+        error_log('=== INICIANDO PROCESS_RESERVATION CON EMAILS ===');
+
+        // Verificar nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'reservas_nonce')) {
+            wp_send_json_error('Error de seguridad');
+            return;
+        }
+
+        // Validar y sanitizar datos del formulario
+        $datos_personales = $this->validar_datos_personales();
+        if (!$datos_personales['valido']) {
+            wp_send_json_error($datos_personales['error']);
+            return;
+        }
+
+        // Validar y sanitizar datos de la reserva
+        $datos_reserva = $this->validar_datos_reserva();
+        if (!$datos_reserva['valido']) {
+            wp_send_json_error($datos_reserva['error']);
+            return;
+        }
+
+        // Verificar disponibilidad del servicio
+        $servicio = $this->verificar_disponibilidad($datos_reserva['datos']['service_id'], $datos_reserva['datos']['total_personas']);
+        if (!$servicio['disponible']) {
+            wp_send_json_error($servicio['error']);
+            return;
+        }
+
+        // Recalcular precios
+        $calculo_precio = $this->recalcular_precio($datos_reserva['datos']);
+        if (!$calculo_precio['valido']) {
+            wp_send_json_error($calculo_precio['error']);
+            return;
+        }
+
+        // ✅ CREAR LA RESERVA DIRECTAMENTE Y REDIRIGIR
+        $resultado_reserva = $this->crear_reserva(
+            $datos_personales['datos'],
+            $datos_reserva['datos'],
+            $calculo_precio['precio']
+        );
+
+        if (!$resultado_reserva['exito']) {
+            wp_send_json_error($resultado_reserva['error']);
+            return;
+        }
+
+        // Actualizar plazas disponibles
+        $actualizacion = $this->actualizar_plazas_disponibles(
+            $datos_reserva['datos']['service_id'],
+            $datos_reserva['datos']['total_personas']
+        );
+
+        if (!$actualizacion['exito']) {
+            $this->eliminar_reserva($resultado_reserva['reserva_id']);
+            wp_send_json_error('Error actualizando disponibilidad. Reserva cancelada.');
+            return;
+        }
+
+        // ✅ ENVIAR EMAILS DE CONFIRMACIÓN
+        $this->send_confirmation_emails($resultado_reserva['reserva_id']);
+
+        // ✅ RESPUESTA CORREGIDA CON LOCALIZADOR EN URL
+        $response_data = array(
+            'mensaje' => 'Reserva procesada correctamente',
+            'redirect_url' => home_url('/confirmacion-reserva/?localizador=' . $resultado_reserva['localizador']),
+            'localizador' => $resultado_reserva['localizador'],
+            'reserva_id' => $resultado_reserva['reserva_id'],
+            'detalles' => array(
+                'fecha' => $datos_reserva['datos']['fecha'],
+                'hora' => $datos_reserva['datos']['hora_ida'],
+                'personas' => $datos_reserva['datos']['total_personas'],
+                'precio_final' => $calculo_precio['precio']['precio_final']
+            )
+        );
+
+        error_log('SUCCESS: Reserva completada directamente, redirigiendo a confirmación con localizador: ' . $resultado_reserva['localizador']);
+        wp_send_json_success($response_data);
+        
+    } catch (Exception $e) {
+        error_log('EXCEPTION: ' . $e->getMessage());
+        wp_send_json_error('Error interno del servidor: ' . $e->getMessage());
+    }
+}
 
     /**
      * ✅ FUNCIÓN PARA ENVIAR EMAILS DE CONFIRMACIÓN
@@ -555,7 +535,7 @@ wp_send_json_success($response_data);
     }
 
     /**
-     * Crear reserva en la base de datos
+     * Crear reserva en la base de datos - VERSIÓN CORREGIDA
      */
     private function crear_reserva($datos_personales, $datos_reserva, $calculo_precio)
     {
@@ -579,31 +559,32 @@ wp_send_json_success($response_data);
             "SELECT hora_vuelta FROM $table_servicios WHERE id = %d",
             $datos_reserva['service_id']
         ));
-// ✅ PREPARAR DATOS PARA INSERTAR SIN REDSYS
-$reserva_data = array(
-    'localizador' => $localizador,
-    'redsys_order_id' => null, // No hay order ID de Redsys
-    'servicio_id' => $datos_reserva['service_id'],
-    'fecha' => $datos_reserva['fecha'],
-    'hora' => $datos_reserva['hora_ida'],
-    'hora_vuelta' => $servicio ? $servicio->hora_vuelta : null,
-    'nombre' => $datos_personales['nombre'],
-    'apellidos' => $datos_personales['apellidos'],
-    'email' => $datos_personales['email'],
-    'telefono' => $datos_personales['telefono'],
-    'adultos' => $datos_reserva['adultos'],
-    'residentes' => $datos_reserva['residentes'],
-    'ninos_5_12' => $datos_reserva['ninos_5_12'],
-    'ninos_menores' => $datos_reserva['ninos_menores'],
-    'total_personas' => $datos_reserva['total_personas'],
-    'precio_base' => $calculo_precio['precio_base'],
-    'descuento_total' => $calculo_precio['descuento_total'],
-    'precio_final' => $calculo_precio['precio_final'],
-    'regla_descuento_aplicada' => $calculo_precio['regla_descuento_aplicada'] ? json_encode($calculo_precio['regla_descuento_aplicada']) : null,
-    'estado' => 'confirmada',
-    'metodo_pago' => 'directo', // ✅ CAMBIAR A DIRECTO
-    'created_at' => current_time('mysql')
-);
+
+        // ✅ PREPARAR DATOS PARA INSERTAR SIN REDSYS
+        $reserva_data = array(
+            'localizador' => $localizador,
+            'redsys_order_id' => null, // No hay order ID de Redsys
+            'servicio_id' => $datos_reserva['service_id'],
+            'fecha' => $datos_reserva['fecha'],
+            'hora' => $datos_reserva['hora_ida'],
+            'hora_vuelta' => $servicio ? $servicio->hora_vuelta : null,
+            'nombre' => $datos_personales['nombre'],
+            'apellidos' => $datos_personales['apellidos'],
+            'email' => $datos_personales['email'],
+            'telefono' => $datos_personales['telefono'],
+            'adultos' => $datos_reserva['adultos'],
+            'residentes' => $datos_reserva['residentes'],
+            'ninos_5_12' => $datos_reserva['ninos_5_12'],
+            'ninos_menores' => $datos_reserva['ninos_menores'],
+            'total_personas' => $datos_reserva['total_personas'],
+            'precio_base' => $calculo_precio['precio_base'],
+            'descuento_total' => $calculo_precio['descuento_total'],
+            'precio_final' => $calculo_precio['precio_final'],
+            'regla_descuento_aplicada' => $calculo_precio['regla_descuento_aplicada'] ? json_encode($calculo_precio['regla_descuento_aplicada']) : null,
+            'estado' => 'confirmada',
+            'metodo_pago' => 'directo', // ✅ CAMBIAR A DIRECTO
+            'created_at' => current_time('mysql')
+        );
 
         error_log('Datos de reserva a insertar: ' . print_r($reserva_data, true));
 
@@ -616,7 +597,7 @@ $reserva_data = array(
         }
 
         $reserva_id = $wpdb->insert_id;
-        error_log('✅ Reserva insertada con ID: ' . $reserva_id . ' y redsys_order_id: ' . ($datos_reserva['order_id'] ?? 'null'));
+        error_log('✅ Reserva insertada con ID: ' . $reserva_id);
 
         return array(
             'exito' => true,
