@@ -5183,6 +5183,13 @@ function renderCreateAgencyModal() {
                    style="text-transform: uppercase;">
             <small>Letra(s) que aparecerán al inicio de los localizadores (máx. 5 caracteres)</small>
         </div>
+        <div class="form-group">
+    <label for="horas_cancelacion_previa">Horas Previas a Cancelación</label>
+    <input type="number" name="horas_cancelacion_previa" id="horas_cancelacion_previa" 
+           value="24" min="1" max="168" required
+           style="background-color: #fff3cd; border: 2px solid #ffc107;">
+    <small style="color: #856404; font-weight: bold;">⏰ Tiempo límite (en horas) para que esta agencia pueda cancelar reservas</small>
+</div>
     </div>
 </div>
                     
@@ -5278,6 +5285,13 @@ function renderEditAgencyModal() {
                    style="text-transform: uppercase;">
             <small>Letra(s) que aparecerán al inicio de los localizadores (máx. 5 caracteres)</small>
         </div>
+        <div class="form-group">
+    <label for="edit_horas_cancelacion_previa">Horas Previas a Cancelación</label>
+    <input type="number" name="horas_cancelacion_previa" id="edit_horas_cancelacion_previa" 
+           min="1" max="168" required
+           style="background-color: #fff3cd; border: 2px solid #ffc107;">
+    <small style="color: #856404; font-weight: bold;">⏰ Tiempo límite (en horas) para que esta agencia pueda cancelar reservas</small>
+</div>
     </div>
 </div>
                     
@@ -5457,6 +5471,7 @@ function editAgency(agencyId) {
 
                 // ✅ AÑADIR ESTA LÍNEA:
                 jQuery('#edit_inicial_localizador').val(agency.inicial_localizador || 'A');
+                jQuery('#edit_horas_cancelacion_previa').val(agency.horas_cancelacion_previa || 24);
 
                 // ✅ ESTADO
                 jQuery('#edit_status').val(agency.status);
