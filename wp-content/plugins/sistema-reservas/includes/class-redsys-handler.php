@@ -73,13 +73,12 @@ function generar_formulario_redsys($reserva_data) {
         'https://sis.redsys.es/sis/realizarPago' :
         'https://sis-t.redsys.es:25443/sis/realizarPago';
 
-    // ✅ FORMULARIO LIMPIO
-    $html = '<div id="redsys-redirect-container">';
-    $html .= '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:99999;">';
+    // ✅ FORMULARIO CORREGIDO SIN CARACTERES PROBLEMÁTICOS
+    $html = '<div id="redsys-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:99999;">';
     $html .= '<div style="background:white;padding:30px;border-radius:10px;text-align:center;max-width:400px;">';
     $html .= '<h3 style="margin:0 0 20px 0;color:#333;">Redirigiendo al banco...</h3>';
-    $html .= '<div style="margin:20px 0;">⏳ Por favor, espere...</div>';
-    $html .= '<p style="font-size:14px;color:#666;margin:20px 0 0 0;">Será redirigido automáticamente a la pasarela de pago segura.</p>';
+    $html .= '<div style="margin:20px 0;">Por favor, espere...</div>';
+    $html .= '<p style="font-size:14px;color:#666;margin:20px 0 0 0;">Sera redirigido automaticamente a la pasarela de pago segura.</p>';
     $html .= '</div></div>';
     $html .= '<form id="formulario_redsys" action="' . $redsys_url . '" method="POST" style="display:none;">';
     $html .= '<input type="hidden" name="Ds_SignatureVersion" value="' . $version . '">';
@@ -92,7 +91,6 @@ function generar_formulario_redsys($reserva_data) {
     $html .= 'if(form) { form.submit(); } else { alert("Error inicializando pago"); }';
     $html .= '}, 1000);';
     $html .= '</script>';
-    $html .= '</div>';
 
     guardar_datos_pedido($pedido, $reserva_data);
     return $html;
