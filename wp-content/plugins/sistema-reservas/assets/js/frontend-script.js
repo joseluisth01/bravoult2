@@ -834,28 +834,43 @@ function processReservation() {
         
         return response.json();
     })
-    .then(data => {
-        console.log("Respuesta del servidor:", data);
+.then(data => {
+    console.log("Respuesta del servidor:", data);
 
-        // Rehabilitar botón
-        if (window.enableProcessButton) window.enableProcessButton();
+    // Rehabilitar botón
+    if (window.enableProcessButton) window.enableProcessButton();
 
-        if (data && data.success) {
-            console.log("✅ Formulario de Redsys generado correctamente");
-            
-            // ✅ INSERTAR FORMULARIO Y ENVIARLO AUTOMÁTICAMENTE
-            const formContainer = document.createElement('div');
-            formContainer.innerHTML = data.data;
-            document.body.appendChild(formContainer);
-            
-            console.log("🏦 Redirigiendo a Redsys...");
-            
-        } else {
-            console.error("❌ Error generando formulario Redsys:", data);
-            const errorMsg = data && data.data ? data.data : "Error generando formulario de pago";
-            alert("Error: " + errorMsg);
-        }
-    })
+    if (data && data.success) {
+        console.log("✅ Formulario de Redsys generado correctamente");
+        
+        // ✅ INSERTAR Y ENVIAR FORMULARIO INMEDIATAMENTE
+        const formContainer = document.createElement('div');
+        formContainer.innerHTML = data.data;
+        document.body.appendChild(formContainer);
+        
+        console.log("🏦 Formulario insertado en DOM");
+        
+        // ✅ TIMEOUT DE SEGURIDAD POR SI EL AUTO-SUBMIT FALLA
+        setTimeout(() => {
+            const overlay = document.getElementById('redsys-overlay');
+            if (overlay) {
+                console.log("⚠️ Timeout alcanzado, intentando envío manual...");
+                const form = document.getElementById('formulario_redsys');
+                if (form) {
+                    form.submit();
+                } else {
+                    alert("Error: No se pudo procesar el pago. Por favor, inténtalo de nuevo.");
+                    overlay.remove();
+                }
+            }
+        }, 5000); // 5 segundos de timeout
+        
+    } else {
+        console.error("❌ Error generando formulario Redsys:", data);
+        const errorMsg = data && data.data ? data.data : "Error generando formulario de pago";
+        alert("Error: " + errorMsg);
+    }
+})
     .catch(error => {
         console.error("❌ Error de conexión:", error);
 
