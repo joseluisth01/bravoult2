@@ -1673,12 +1673,12 @@ function ajax_generar_formulario_pago_redsys()
 }
 
 // ✅ REGISTRAR LA FUNCIÓN AJAX
-add_action('wp_ajax_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
-add_action('wp_ajax_nopriv_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
+// add_action('wp_ajax_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
+// add_action('wp_ajax_nopriv_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
 
 add_action('wp_ajax_reset_super_admin', 'reset_super_admin_credentials');
 
-function reset_super_admin_credentials() {
+/* function reset_super_admin_credentials() {
     // Solo permitir en desarrollo o con parámetro específico
     if (!isset($_GET['reset_admin']) || $_GET['reset_admin'] !== 'confirm') {
         wp_die('Acción no autorizada');
@@ -1729,12 +1729,12 @@ function reset_super_admin_credentials() {
     }
     
     exit;
-}
+} */
 
-add_action('wp_ajax_redsys_notification', 'handle_redsys_notification');
-add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
+// add_action('wp_ajax_redsys_notification', 'handle_redsys_notification');
+// add_action('wp_ajax_nopriv_redsys_notification', 'handle_redsys_notification');
 
-function handle_redsys_notification() {
+/* function handle_redsys_notification() {
     error_log('🔁 Recibida notificación de Redsys (MerchantURL)');
     error_log('POST data: ' . print_r($_POST, true));
     error_log('GET data: ' . print_r($_GET, true));
@@ -1800,7 +1800,7 @@ function handle_redsys_notification() {
     }
 
     exit;
-}
+} */
 
 
 // ✅ NUEVA FUNCIÓN: Procesar pago cuando llega por URL GET

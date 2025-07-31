@@ -114,22 +114,21 @@ class ReservasProcessor
             set_transient('confirmed_reservation_' . $resultado_reserva['localizador'], $confirmation_data, 3600);
             set_transient('latest_confirmed_reservation', $confirmation_data, 1800);
 
-            // ✅ RESPUESTA CON REDIRECCIÓN
             $response_data = array(
-                'mensaje' => 'Reserva procesada correctamente',
-                'redirect_url' => home_url('/confirmacion-reserva/'),
-                'localizador' => $resultado_reserva['localizador'],
-                'reserva_id' => $resultado_reserva['reserva_id'],
-                'detalles' => array(
-                    'fecha' => $datos_reserva['datos']['fecha'],
-                    'hora' => $datos_reserva['datos']['hora_ida'],
-                    'personas' => $datos_reserva['datos']['total_personas'],
-                    'precio_final' => $calculo_precio['precio']['precio_final']
-                )
-            );
+    'mensaje' => 'Reserva procesada correctamente',
+    'redirect_url' => home_url('/confirmacion-reserva/'),
+    'localizador' => $resultado_reserva['localizador'],
+    'reserva_id' => $resultado_reserva['reserva_id'],
+    'detalles' => array(
+        'fecha' => $datos_reserva['datos']['fecha'],
+        'hora' => $datos_reserva['datos']['hora_ida'],
+        'personas' => $datos_reserva['datos']['total_personas'],
+        'precio_final' => $calculo_precio['precio']['precio_final']
+    )
+);
 
-            error_log('SUCCESS: Reserva completada directamente, redirigiendo a confirmación');
-            wp_send_json_success($response_data);
+error_log('SUCCESS: Reserva completada directamente, redirigiendo a confirmación');
+wp_send_json_success($response_data);
         } catch (Exception $e) {
             error_log('EXCEPTION: ' . $e->getMessage());
             wp_send_json_error('Error interno del servidor: ' . $e->getMessage());

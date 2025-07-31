@@ -733,7 +733,7 @@ jQuery(document).ready(function ($) {
 });
 
 function processReservation() {
-    console.log("=== PROCESANDO RESERVA CON REDSYS ===");
+    console.log("=== PROCESANDO RESERVA DIRECTAMENTE ===");
 
     // Verificar checkbox de privacidad
     const checkbox = document.getElementById("privacy-policy");
@@ -801,16 +801,18 @@ function processReservation() {
         };
     }
 
-    // Preparar datos completos para Redsys
-    const redsysData = {
-        ...reservationData,
+    // ✅ CAMBIO PRINCIPAL: Enviar directamente a process_reservation
+    const requestData = {
+        action: "process_reservation",
+        nonce: reservasAjax.nonce,
         nombre: nombre,
         apellidos: apellidos,
         email: email,
-        telefono: telefono
+        telefono: telefono,
+        reservation_data: JSON.stringify(reservationData)
     };
 
-    console.log("Enviando datos a Redsys:", redsysData);
+    console.log("Enviando datos directamente a process_reservation:", requestData);
 
     // Enviar solicitud AJAX
     fetch(reservasAjax.ajax_url, {
@@ -818,69 +820,40 @@ function processReservation() {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: new URLSearchParams({
-            action: "generar_formulario_pago_redsys",
-            nonce: reservasAjax.nonce,
-            reservation_data: JSON.stringify(redsysData)
-        })
+        body: new URLSearchParams(requestData)
     })
     .then(response => {
         console.log("Response status:", response.status);
-        console.log("Response headers:", response.headers);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        return response.text();
+        return response.json();
     })
-    .then(text => {
-        console.log("Response text:", text.substring(0, 200) + "...");
-        
-        try {
-            const data = JSON.parse(text);
-            console.log("Respuesta parseada:", data);
+    .then(data => {
+        console.log("Respuesta del servidor:", data);
 
-            // Rehabilitar botón
-            if (window.enableProcessButton) window.enableProcessButton();
+        // Rehabilitar botón
+        if (window.enableProcessButton) window.enableProcessButton();
 
-            if (data && data.success) {
-                console.log("✅ Formulario Redsys generado correctamente");
-                
-                // ✅ AQUÍ ESTÁ LA CORRECCIÓN: Insertar y ejecutar el formulario
-                console.log("🚀 Insertando formulario de Redsys en el DOM...");
-                
-                // Crear un div temporal para el formulario
-                const formContainer = document.createElement('div');
-                formContainer.innerHTML = data.data;
-                
-                // Añadir al body
-                document.body.appendChild(formContainer);
-                
-                // Buscar el formulario y enviarlo
-                const form = document.getElementById('formulario_redsys');
-                if (form) {
-                    console.log("🎯 Formulario encontrado, enviando a Redsys...");
-                    console.log("🌐 URL destino:", form.action);
-                    
-                    // Enviar el formulario automáticamente
-                    form.submit();
-                } else {
-                    console.error("❌ No se encontró el formulario en el HTML generado");
-                    alert("Error: No se pudo generar el formulario de pago");
-                }
-                
-            } else {
-                console.error("❌ Error generando formulario Redsys:", data);
-                const errorMsg = data && data.data ? data.data : "Error generando formulario de pago";
-                alert("Error preparando el pago: " + errorMsg);
-            }
-        } catch (parseError) {
-            console.error("❌ Error parsing JSON:", parseError);
-            console.error("Raw response:", text);
+        if (data && data.success) {
+            console.log("✅ Reserva procesada correctamente");
             
-            if (window.enableProcessButton) window.enableProcessButton();
-            alert("Error en la respuesta del servidor. Por favor, inténtalo de nuevo.");
+            // ✅ REDIRIGIR DIRECTAMENTE A CONFIRMACIÓN
+            const confirmationUrl = data.data.redirect_url || (window.location.origin + '/confirmacion-reserva/');
+            console.log("🎯 Redirigiendo a:", confirmationUrl);
+            
+            // Limpiar sessionStorage
+            sessionStorage.removeItem("reservationData");
+            
+            // Redirigir
+            window.location.href = confirmationUrl;
+            
+        } else {
+            console.error("❌ Error procesando reserva:", data);
+            const errorMsg = data && data.data ? data.data : "Error procesando la reserva";
+            alert("Error: " + errorMsg);
         }
     })
     .catch(error => {
@@ -889,8 +862,7 @@ function processReservation() {
         // Rehabilitar botón
         if (window.enableProcessButton) window.enableProcessButton();
 
-        let errorMessage = "Error de conexión al preparar el pago.";
-
+        let errorMessage = "Error de conexión al procesar la reserva.";
         if (error.message.includes('403')) {
             errorMessage += " (Error 403: Acceso denegado)";
         } else if (error.message.includes('404')) {
