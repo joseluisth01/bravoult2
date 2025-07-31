@@ -107,14 +107,24 @@ function process_successful_payment($order_id, $params) {
     error_log("Order ID: $order_id");
     error_log("Params: " . print_r($params, true));
     
-    // Recuperar datos de la reserva
-    $reservation_data = get_transient('redsys_order_' . $order_id);
+    // ✅ ASEGURAR QUE LA SESIÓN ESTÉ ACTIVA
+    if (!session_id()) {
+        session_start();
+    }
     
-    if (!$reservation_data) {
-        if (!session_id()) {
-            session_start();
-        }
-        $reservation_data = $_SESSION['pending_orders'][$order_id]['reservation_data'] ?? null;
+    // ✅ RECUPERAR DATOS DE MÚLTIPLES FUENTES
+    $reservation_data = null;
+    
+    // 1. Intentar desde transient
+    $reservation_data = get_transient('redsys_order_' . $order_id);
+    if ($reservation_data) {
+        error_log('✅ Datos encontrados en transient');
+    }
+    
+    // 2. Si no, intentar desde sesión
+    if (!$reservation_data && isset($_SESSION['pending_orders'][$order_id])) {
+        $reservation_data = $_SESSION['pending_orders'][$order_id];
+        error_log('✅ Datos encontrados en sesión');
     }
     
     if (!$reservation_data) {
@@ -123,6 +133,20 @@ function process_successful_payment($order_id, $params) {
     }
 
     try {
+        // ✅ VERIFICAR QUE NO SE HAYA PROCESADO YA
+        global $wpdb;
+        $table_reservas = $wpdb->prefix . 'reservas_reservas';
+        
+        $existing = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $table_reservas WHERE redsys_order_id = %s",
+            $order_id
+        ));
+
+        if ($existing) {
+            error_log("⚠️ Reserva ya procesada para order_id: $order_id (ID: $existing)");
+            return true; // No es error, ya está procesada
+        }
+
         // Procesar la reserva usando tu sistema existente
         if (!class_exists('ReservasProcessor')) {
             require_once RESERVAS_PLUGIN_PATH . 'includes/class-reservas-processor.php';
@@ -139,7 +163,7 @@ function process_successful_payment($order_id, $params) {
             'reservation_data' => json_encode($reservation_data),
             'metodo_pago' => 'redsys',
             'transaction_id' => $params['Ds_AuthorisationCode'] ?? '',
-            'order_id' => $order_id // ✅ AÑADIR ESTO
+            'order_id' => $order_id
         );
 
         // Procesar la reserva usando el método existente
@@ -260,3 +284,26 @@ function get_reservation_data_for_confirmation() {
     return null;
 }
 
+function guardar_datos_pedido($order_id, $reserva_data) {
+    error_log('=== GUARDANDO DATOS DEL PEDIDO ===');
+    error_log("Order ID: $order_id");
+    
+    // ✅ INICIALIZAR SESIÓN SI NO ESTÁ ACTIVA
+    if (!session_id()) {
+        session_start();
+    }
+    
+    // ✅ INICIALIZAR ARRAY SI NO EXISTE
+    if (!isset($_SESSION['pending_orders'])) {
+        $_SESSION['pending_orders'] = array();
+    }
+    
+    // ✅ GUARDAR DATOS DEL PEDIDO
+    $_SESSION['pending_orders'][$order_id] = $reserva_data;
+    
+    // ✅ TAMBIÉN GUARDAR EN TRANSIENT COMO BACKUP
+    set_transient('redsys_order_' . $order_id, $reserva_data, 3600); // 1 hora
+    
+    error_log("✅ Datos del pedido $order_id guardados correctamente");
+    error_log("Datos guardados: " . print_r($reserva_data, true));
+}

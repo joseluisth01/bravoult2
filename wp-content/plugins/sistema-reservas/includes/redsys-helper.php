@@ -13,14 +13,18 @@ function generar_formulario_redsys($reserva_data) {
 
     // ✅ CONFIGURACIÓN PARA PRUEBAS
     if (is_production_environment()) {
+        // PRODUCCIÓN (cuando esté listo)
         $clave = 'Q+2780shKFbG3vkPXS2+kY6RWQLQnWD9';
         $codigo_comercio = '014591697';
         $terminal = '001';
+        $redsys_url = 'https://sis.redsys.es/sis/realizarPago';
         error_log('🟢 USANDO CONFIGURACIÓN DE PRODUCCIÓN');
     } else {
+        // PRUEBAS
         $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
-        $codigo_comercio = '999008881';
+        $codigo_comercio = '999008881'; // ✅ CÓDIGO DE COMERCIO DE PRUEBAS
         $terminal = '001';
+        $redsys_url = 'https://sis-t.redsys.es:25443/sis/realizarPago';
         error_log('🟡 USANDO CONFIGURACIÓN DE PRUEBAS');
     }
     

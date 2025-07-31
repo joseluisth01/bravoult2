@@ -1519,8 +1519,11 @@ add_action('admin_init', function () {
 
 
 
-function ajax_generar_formulario_pago_redsys()
-{
+add_action('wp_ajax_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
+add_action('wp_ajax_nopriv_generar_formulario_pago_redsys', 'ajax_generar_formulario_pago_redsys');
+
+// ✅ FUNCIÓN AJAX REDSYS CORREGIDA
+function ajax_generar_formulario_pago_redsys() {
     error_log('=== FUNCIÓN REDSYS EJECUTADA ===');
 
     try {
@@ -1541,124 +1544,14 @@ function ajax_generar_formulario_pago_redsys()
 
         error_log('Datos recibidos para Redsys: ' . print_r($reserva, true));
 
-        // Cargar API de Redsys
-        if (!class_exists('RedsysAPI')) {
-            require_once RESERVAS_PLUGIN_PATH . 'includes/redsys-api.php';
+        // ✅ USAR LA FUNCIÓN EXISTENTE DE REDSYS
+        if (!function_exists('generar_formulario_redsys')) {
+            require_once RESERVAS_PLUGIN_PATH . 'includes/class-redsys-handler.php';
         }
 
-        $miObj = new RedsysAPI();
-
-        // ✅ CONFIGURACIÓN DE PRUEBAS
-        $clave = 'sq7HjrUOBfKmC576ILgskD5srU870gJ7';
-        $codigo_comercio = '014591697';
-        $terminal = '001';
-
-        // Procesar precio
-        $total_price = str_replace(['€', ' ', ','], ['', '', '.'], $reserva['total_price']);
-        $total_price = floatval($total_price);
-        $importe = intval($total_price * 100); // Convertir a céntimos
-
-        // Generar número de pedido único
-        $pedido = date('ymdHis') . rand(100, 999);
-
-        error_log("Configurando pago - Importe: $importe céntimos, Pedido: $pedido");
-
-        // Configurar parámetros de Redsys
-        $miObj->setParameter("DS_MERCHANT_AMOUNT", $importe);
-        $miObj->setParameter("DS_MERCHANT_ORDER", $pedido);
-        $miObj->setParameter("DS_MERCHANT_MERCHANTCODE", $codigo_comercio);
-        $miObj->setParameter("DS_MERCHANT_CURRENCY", "978"); // EUR
-        $miObj->setParameter("DS_MERCHANT_TRANSACTIONTYPE", "0"); // Autorización
-        $miObj->setParameter("DS_MERCHANT_TERMINAL", $terminal);
-
-        // URLs de respuesta
-        $base_url = home_url();
-        $miObj->setParameter("DS_MERCHANT_MERCHANTURL", $base_url . '/wp-admin/admin-ajax.php?action=redsys_notification');
-        $miObj->setParameter("DS_MERCHANT_URLOK", $base_url . '/confirmacion-reserva/?status=ok&order=' . $pedido);
-        $miObj->setParameter("DS_MERCHANT_URLKO", $base_url . '/error-pago/?status=ko&order=' . $pedido);
-
-        // Generar parámetros y firma
-        $params = $miObj->createMerchantParameters();
-        $signature = $miObj->createMerchantSignature($clave);
-
-        // Guardar datos del pedido para procesamiento posterior
-        guardar_datos_pedido($pedido, $reserva);
-
-        // ✅ URL DEL TPV DE PRUEBAS
-        $redsys_url = 'https://sis-t.redsys.es:25443/sis/realizarPago';
-
-        // Generar formulario HTML
-        $formulario_html = '
-        <div id="redsys-overlay" style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-        ">
-            <div style="
-                background: white;
-                padding: 40px;
-                border-radius: 15px;
-                text-align: center;
-                max-width: 400px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            ">
-                <div style="font-size: 48px; margin-bottom: 20px;">🏦</div>
-                <h3 style="margin: 0 0 15px 0; color: #333;">Redirigiendo al banco...</h3>
-                <p style="color: #666; margin: 0 0 20px 0;">
-                    Por favor, espere mientras lo conectamos con la pasarela de pago segura.
-                </p>
-                <div style="margin: 20px 0;">
-                    <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #0073aa; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-                </div>
-                <p style="font-size: 12px; color: #999; margin: 15px 0 0 0;">
-                    Si no es redirigido automáticamente, haga clic en "Continuar"
-                </p>
-                <button onclick="document.getElementById(\'formulario_redsys\').submit();" style="
-                    background: #0073aa;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    margin-top: 10px;
-                ">Continuar al pago</button>
-            </div>
-        </div>
+        $formulario_html = generar_formulario_redsys($reserva);
         
-        <form id="formulario_redsys" action="' . $redsys_url . '" method="POST" style="display: none;">
-            <input type="hidden" name="Ds_SignatureVersion" value="HMAC_SHA256_V1">
-            <input type="hidden" name="Ds_MerchantParameters" value="' . $params . '">
-            <input type="hidden" name="Ds_Signature" value="' . $signature . '">
-        </form>
-        
-        <style>
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        </style>
-        
-        <script>
-        console.log("🏦 Formulario de Redsys generado");
-        console.log("Pedido: ' . $pedido . '");
-        console.log("Importe: ' . $importe . ' céntimos");
-        
-        // Auto-enviar después de 2 segundos
-        setTimeout(function() {
-            console.log("Auto-enviando formulario de Redsys...");
-            document.getElementById("formulario_redsys").submit();
-        }, 2000);
-        </script>';
-
-        error_log("✅ Formulario Redsys generado para pedido: $pedido");
-
+        error_log("✅ Formulario Redsys generado correctamente");
         wp_send_json_success($formulario_html);
 
     } catch (Exception $e) {
@@ -1667,17 +1560,7 @@ function ajax_generar_formulario_pago_redsys()
     }
 }
 
-// ✅ FUNCIÓN PARA GUARDAR DATOS DEL PEDIDO
-function guardar_datos_pedido($order_id, $reservation_data) {
-    // Guardar en tabla temporal o en sesión para procesar después del pago
-    if (!session_id()) {
-        session_start();
-    }
-    
-    $_SESSION['pending_orders'][$order_id] = $reservation_data;
-    
-    error_log("✅ Datos del pedido $order_id guardados para procesamiento posterior");
-}
+
 
 
 
